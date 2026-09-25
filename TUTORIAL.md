@@ -108,6 +108,10 @@ mywebsite/
 
 ### Prerequisites
 - **Go 1.21+** installed on your operating system.
+- **templ CLI** installed globally:
+  ```bash
+  go install github.com/a-h/templ/cmd/templ@latest
+  ```
 
 ### Installing the Ztatic CLI
 
@@ -224,7 +228,7 @@ func (r *ArticleRepository) FindByAuthor(ctx context.Context, author string) ([]
 		return nil, err
 	}
 
-	rows, err := r.DB.DB.QueryContext(ctx, query, args...)
+	rows, err := r.DB.SQL.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +356,7 @@ import (
 	"mywebsite/internal/repositories"
 )
 
-func RegisterAPI(app *ztatic.App, articleRepo *repositories.ArticleRepository) {
+func RegisterAPI(app *ztatic.Engine, articleRepo *repositories.ArticleRepository) {
 	// Automatically registers GET /, GET /:id, POST /, PUT /:id, DELETE /:id
 	// and extracts struct tags (json & validate) for OpenAPI 3.0 docs!
 	rapid.RegisterResource(app.Group("/api/articles"), "articles", articleRepo)

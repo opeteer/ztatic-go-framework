@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -53,7 +54,7 @@ import (
 func main() {
 	app := ztatic.NewSecure()
 	
-	app.GET("/", func(c ztatic.Context) error {
+	app.GET("/", func(c *ztatic.Context) error {
 		return c.String(200, "Welcome to Ztatic!")
 	})
 
@@ -65,9 +66,16 @@ func main() {
 		}
 
 		// Generate go.mod
-		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n", projectName)
+		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire ztatic-go-framework v0.0.0\n\nreplace ztatic-go-framework => ../\n", projectName)
 		if err := os.WriteFile(filepath.Join(baseDir, "go.mod"), []byte(modContent), 0644); err != nil {
 			fmt.Printf("Error writing go.mod: %v\n", err)
+		}
+
+		// Run go mod tidy
+		cmdTidy := exec.Command("go", "mod", "tidy")
+		cmdTidy.Dir = baseDir
+		if err := cmdTidy.Run(); err != nil {
+			fmt.Printf("Warning: failed to run 'go mod tidy': %v\n", err)
 		}
 
 		fmt.Println("✅ Project scaffolded successfully!")

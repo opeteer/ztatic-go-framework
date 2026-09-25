@@ -61,7 +61,10 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 ## Quick Start
 
 ### Installation & Prerequisites
-Requires **Go 1.21+**.
+Requires **Go 1.21+** and the **templ** CLI:
+```bash
+go install github.com/a-h/templ/cmd/templ@latest
+```
 
 ```bash
 # Clone the repository

@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/labstack/echo/v5"
 )
 
 // ErrNotFound is returned when a query expects a row but none is found.
@@ -31,9 +32,9 @@ func NewBaseRepository[T any](db *DBEngine, tableName string) *BaseRepository[T]
 	}
 }
 
-// FindByID retrieves a single entity by its primary key (ID).
+// QueryByID retrieves a single entity by its primary key (ID).
 // It accepts a custom scanFn to map the SQL columns into the generic Struct T.
-func (r *BaseRepository[T]) FindByID(ctx context.Context, id any, scanFn func(row Scanner, entity *T) error) (*T, error) {
+func (r *BaseRepository[T]) QueryByID(ctx context.Context, id any, scanFn func(row Scanner, entity *T) error) (*T, error) {
 	query, args, err := r.DB.Builder.
 		Select("*").
 		From(r.TableName).
@@ -83,4 +84,33 @@ func (r *BaseRepository[T]) DeleteByID(ctx context.Context, id any) error {
 	}
 	
 	return nil
+}
+
+// --- rapid.Resource[T] Interface Default Implementations ---
+// These default methods ensure that any repository embedding BaseRepository[T] 
+// automatically satisfies the rapid.Resource[T] interface, allowing it to be 
+// mounted directly via rapid.RegisterResource. Developers can override these 
+// methods in their specific repositories to provide actual implementations.
+
+func (r *BaseRepository[T]) FindAll(c *echo.Context) ([]T, error) {
+	return nil, errors.New("ztatic: FindAll not implemented in base repository")
+}
+
+func (r *BaseRepository[T]) FindByID(c *echo.Context, id string) (T, error) {
+	var empty T
+	return empty, errors.New("ztatic: FindByID not implemented in base repository")
+}
+
+func (r *BaseRepository[T]) Create(c *echo.Context, item *T) (T, error) {
+	var empty T
+	return empty, errors.New("ztatic: Create not implemented in base repository")
+}
+
+func (r *BaseRepository[T]) Update(c *echo.Context, id string, item *T) (T, error) {
+	var empty T
+	return empty, errors.New("ztatic: Update not implemented in base repository")
+}
+
+func (r *BaseRepository[T]) Delete(c *echo.Context, id string) error {
+	return errors.New("ztatic: Delete not implemented in base repository")
 }
