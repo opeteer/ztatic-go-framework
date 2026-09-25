@@ -16,8 +16,14 @@ var (
 // encrypts or decrypts all string fields that are tagged with `ztatic:"encrypt"`.
 func ProcessStruct(data any, cs *CipherSuite, isEncrypting bool) error {
 	v := reflect.ValueOf(data)
-	if !v.IsValid() || v.IsNil() {
+	if !v.IsValid() {
 		return nil
+	}
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		if v.IsNil() {
+			return nil
+		}
 	}
 	
 	// If a pointer, dereference top-level pointer

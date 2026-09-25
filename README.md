@@ -5,50 +5,52 @@
 [![Architecture](https://img.shields.io/badge/Architecture-HOTW-success?style=flat-square)](https://github.com/opeteer/ztatic-go-framework)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
-**Ztatic** is an enterprise-grade, security-first full-stack framework built on top of **Echo v5**. It transforms Go into a high-productivity full-stack monolith ecosystem using the **HOTW (HTML Over The Wire)** stack: **Templ**, **Hotwire (Turbo)**, **Alpine.js**, **esbuild**, and **Server-Sent Events (SSE)**.
+**Ztatic** is a modern, high-performance, security-first full-stack framework built on top of **Echo v5**. It enables Go developers to build high-productivity full-stack web applications using the **HOTW (HTML Over The Wire)** stack: **Templ**, **Hotwire (Turbo)**, **Alpine.js**, native **esbuild**, and **Realtime Pub/Sub (SSE & WebSockets)**.
 
-With Ztatic, you write pure Go and HTML—**zero Node.js or npm required**—and compile your entire application (templates, JavaScript, CSS, migrations) into a **single, statically-linked binary** capable of pushing real-time updates in microsecond scale.
+With Ztatic, you write pure Go and HTML—**zero Node.js or npm required**—and compile your entire application (templates, TypeScript/JS, CSS, database migrations) into a **single, statically-linked binary**.
 
 ---
 
-## Key Features & Architecture Pillars
+## Key Features & Architecture
 
-### 1. Security Suite
-* **Web Security Engine:** Built-in Web Application Firewall (WAF) payload inspection, nonces-based Content Security Policy (CSP), HTTP Strict Transport Security (HSTS), and Double Submit Cookie CSRF protection.
+### 1. Rapid REST API & OpenAPI 3.0 Engine (`rapid`)
+* **Dynamic Route Introspection:** Automatically inspects registered routes and normalizes Echo path parameters (`/users/:id` → `/users/{id}`).
+* **Reflection-Based Struct Tag Parser:** Converts Go struct `json` and `validate` tags (e.g. `required`, `email`, `min`, `max`, `len`) into OpenAPI 3.0.3 JSON schemas with cyclic reference safety.
+* **Auto-Scaffolded Resource Controllers:** `rapid.RegisterResource[T]` automatically generates type-safe REST CRUD endpoints (`GET`, `POST`, `PUT`, `DELETE`) with embedded OpenAPI documentation.
+* **Interactive Scalar UI:** Serves dynamic interactive API documentation via Scalar at `/docs` and raw spec schemas at `/docs/openapi.json`.
+
+### 2. Multi-Node Realtime Pub/Sub Engine (`realtime`)
+* **Dual Event Brokers:** Thread-safe `MemoryBroker` for local development and distributed `RedisBroker` (`go-redis/v9`) supporting standalone Redis, Sentinel, or Redis Cluster configurations for multi-node deployments.
+* **SSE & WebSocket Transports:** Serves native Hotwire Turbo Stream DOM updates over Server-Sent Events (`<turbo-stream-from src="/sse?topic=room">`) or full-duplex WebSockets (`gorilla/websocket`) with automated ping/pong keep-alive heartbeats and graceful disconnect handling.
+
+### 3. Native Asset Pipeline (`fullstack`)
+* **In-Memory esbuild Bundler:** Direct Go integration with `esbuild` compiles TypeScript, JavaScript, and CSS in sub-10ms with structured terminal error reporting (`AssetBundleError`).
+* **Dual-Mode Asset Mounting:** Disk-backed live reloads during development; Go 1.16+ `embed.FS` with SHA-256 content hashing (`app.a8f9b2.js`) and long-term HTTP caching headers in production.
+
+### 4. Data & Persistence Engine (`data`)
+* **AST Query Building:** Integrates `Masterminds/squirrel` for type-safe query construction with automatic SQL dialect placeholder detection (PostgreSQL `$1`, MySQL/SQLite `?`).
+* **Embedded Migrations:** Runs `pressly/goose/v3` SQL schema migrations directly from embedded `embed.FS` directories inside your binary.
+* **Panic-Safe Transactions:** `DBEngine.Transaction(ctx, fn)` automatically handles `COMMIT` on success, and `ROLLBACK` on explicit errors or runtime panics.
+
+### 5. High-Performance Core Router & TLS Proxy (`echo`)
+* **Radix Tree Node Compaction:** `DefaultRouter.Remove` dynamically merges single-child non-handler nodes upon route deletion, preventing tree fragmentation and guaranteeing $O(\text{URL length})$ routing performance.
+* **HTTPS/TLS Reverse Proxy:** Proxy middleware supports custom `crypto/tls.Config` settings (`InsecureSkipVerify`, custom root CAs) for both HTTP reverse proxying (`proxyHTTP`) and raw WebSocket TLS tunneling (`proxyRaw`).
+
+### 6. Built-in Security Suite (`security`)
+* **Web Security Engine:** Web Application Firewall (WAF) payload inspection, nonces-based Content Security Policy (CSP), HTTP Strict Transport Security (HSTS), and Double Submit Cookie CSRF protection.
 * **Data Privacy & Encryption:** AES-256-GCM field-level struct tag encryption (`ztatic:"encrypt"`), Argon2id password hashing, and zero-allocation PII masking for `slog`.
 
-### 2. HOTW Frontend (Templ + Hotwire + Alpine.js)
-* **Templ Integration:** Direct streaming of type-safe Go HTML templates into response buffers (`fullstack.Render`).
-* **Smart Layout Unwrapping:** Automatically detects `Turbo-Frame` request headers and unwraps the outer application layout shell, cutting payload sizes by up to 80%.
-* **Hotwire Turbo Streams:** Native support for Turbo 8 DOM mutation actions (`append`, `prepend`, `replace`, `update`, `remove`, `before`, `after`).
-* **Alpine.js Morphing:** Automatic state-preserving morph headers (`X-Alpine-Morph`) for reactive client-side micro-interactions.
-
-### 3. Native Asset Pipeline
-* **Zero Node.js Dependency:** Native Go binding to the `esbuild` API compiles TypeScript, JavaScript, and CSS in sub-10ms.
-* **Dual-Mode Asset Manager:** Disk-backed live reloads with timestamp cache-busting during development; Go `embed.FS` with immutable 1-year caching in production.
-* **Content Hashing Manifest:** Automatic SHA-256 content hashing (`app.a8f9b2.js`) and manifest loading (`fullstack.AssetURL()`).
-
-### 4. Realtime Engine (SSE & Pub/Sub Broker)
-* **Topic-Based Event Broker:** High-throughput `MemoryBroker` leveraging thread-safe `sync.RWMutex` channels.
-* **Zero-JS Realtime Streams:** Serves Turbo Streams directly over HTTP/1.1 Server-Sent Events (`<turbo-stream-from src="/sse?topic=room:101">`).
-* **Proxy-Optimized:** Includes `X-Accel-Buffering: no` headers to bypass Nginx buffering bottlenecks.
-
-### 5. Enterprise Data Tier
-* **Panic-Safe Transactions:** `DBEngine.Transaction(ctx, fn)` automatically handles `COMMIT` on success, and `ROLLBACK` on explicit errors or runtime panics.
-* **Generic Base Repository:** Go 1.18+ Generics-powered `BaseRepository[T]` eliminates boilerplate CRUD code without sacrificing type safety.
-* **Embedded Migrations:** Embeds Goose SQL schema migrations directly inside your binary using `embed.FS`.
-
-### 6. Unified Developer CLI (`ztatic`)
-* **Scaffolding:** `ztatic new <project_name>` generates production-ready directory layouts.
-* **Live Reload:** `ztatic dev` monitors `.go`, `.templ`, `.css`, and `.js` files, auto-compiling assets and restarting the process.
-* **Single-Binary Build:** `ztatic build` creates an optimized, self-contained binary artifact ready for distribution.
+### 7. Developer CLI (`ztatic`)
+* **Cobra CLI Suite:** Simple developer tooling for scaffolding, building, and running applications.
+* **Live Reload Engine:** `ztatic dev` monitors `.go`, `.templ`, `.css`, and `.js` files via `fsnotify`, automatically regenerating components, bundling assets, and restarting the server with a 100ms debouncer.
+* **Single-Binary Build:** `ztatic build` runs a 4-step pipeline (`templ generate`, `esbuild`, asset manifest generation, `go build`) to create a zero-dependency static binary.
 
 ---
 
 ## Quick Start
 
 ### Installation & Prerequisites
-Ensure you have **Go 1.21+** installed.
+Requires **Go 1.21+**.
 
 ```bash
 # Clone the repository
@@ -65,7 +67,7 @@ go build -o ztatic ./cmd/ztatic
 cd myapp
 ```
 
-This creates the standard Ztatic project architecture:
+This creates the standard Ztatic project layout:
 ```text
 myapp/
 ├── assets/
@@ -95,6 +97,7 @@ import (
 	
 	"ztatic-go-framework"
 	"ztatic-go-framework/fullstack"
+	"ztatic-go-framework/rapid"
 )
 
 func main() {
@@ -102,7 +105,10 @@ func main() {
 	app := ztatic.NewSecure()
 
 	// Serve static assets
-	fullstack.MountAssets(app.Engine, "assets", true)
+	fullstack.MountAssets(app.Engine, assets.FS, true)
+
+	// Mount dynamic OpenAPI documentation at /docs
+	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Engine, "/docs")
 
 	// Define routes
 	app.GET("/", func(c ztatic.Context) error {
@@ -115,37 +121,27 @@ func main() {
 
 ---
 
-## Module Usage Guide
+## Developer Usage Examples
 
-### Rendering Templ Components & Turbo Streams
+### Rapid REST API & OpenAPI Docs (`rapid`)
 
+Define a struct with validation tags:
 ```go
-package controllers
-
-import (
-	"github.com/labstack/echo/v5"
-	"ztatic-go-framework/fullstack"
-)
-
-// Standard HTML View with smart layout unwrapping
-func HandleHome(c *echo.Context) error {
-	// If the request comes from a Turbo-Frame, AppLayout is bypassed automatically!
-	return fullstack.RenderLayout(c, 200, views.AppLayout, views.HomePage())
-}
-
-// Turbo Stream DOM Mutation Response
-func HandleUpdateMessage(c *echo.Context) error {
-	// Appends a component into #messages container
-	return fullstack.RenderTurboStream(
-		c, 
-		fullstack.StreamAppend, 
-		"messages", 
-		components.MessageCard("New Message"),
-	)
+type User struct {
+	ID    int    `json:"id" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
+	Name  string `json:"name" validate:"required,min=2"`
 }
 ```
 
-### Real-Time Server-Sent Events (SSE)
+Register a full REST resource in one line:
+```go
+// Automatically mounts GET /, GET /:id, POST /, PUT /:id, DELETE /:id
+// and registers OpenAPI 3.0 schema definitions in /docs/openapi.json
+rapid.RegisterResource(app.Group("/api/users"), "users", userRepository)
+```
+
+### Real-Time Pub/Sub & WebSockets (`realtime`)
 
 ```go
 package main
@@ -157,12 +153,14 @@ import (
 )
 
 func SetupRealtime(e *echo.Echo) {
+	// Use MemoryBroker for single-instance or RedisBroker for multi-node clusters
 	broker := realtime.NewMemoryBroker()
 
-	// 1. Mount SSE stream endpoint
+	// Mount SSE or WebSocket endpoints
 	e.GET("/sse", realtime.SSEHandler(broker))
+	e.GET("/ws", realtime.WebSocketHandler(broker))
 
-	// 2. Broadcast DOM mutations from anywhere in your backend
+	// Broadcast DOM mutations from anywhere in your backend
 	e.POST("/chat/send", func(c *echo.Context) error {
 		broker.Publish(c.Request().Context(), "chat-room-1", fullstack.TurboStreamItem{
 			Action:    fullstack.StreamAppend,
@@ -174,45 +172,10 @@ func SetupRealtime(e *echo.Echo) {
 }
 ```
 
-In your HTML template, simply declare:
+Connect natively in HTML with zero client JavaScript:
 ```html
 <turbo-stream-from src="/sse?topic=chat-room-1"></turbo-stream-from>
 <div id="chat-box"></div>
-```
-
-### Database Transactions & Generic Repositories
-
-```go
-package repositories
-
-import (
-	"context"
-	"ztatic-go-framework/data"
-)
-
-type User struct {
-	ID    int
-	Email string
-}
-
-type UserRepository struct {
-	*data.BaseRepository[User]
-}
-
-func NewUserRepository(db *data.DBEngine) *UserRepository {
-	return &UserRepository{
-		BaseRepository: data.NewBaseRepository[User](db, "users"),
-	}
-}
-
-// Usage in Handler:
-func CreateUserSafely(db *data.DBEngine, user *User) error {
-	return db.Transaction(context.Background(), func(tx *sql.Tx) error {
-		// All operations inside this closure rollback automatically on error or panic!
-		_, err := tx.Exec("INSERT INTO users (email) VALUES (?)", user.Email)
-		return err
-	})
-}
 ```
 
 ---
@@ -223,31 +186,17 @@ func CreateUserSafely(db *data.DBEngine, user *User) error {
 ```bash
 ./ztatic dev
 ```
-Monitors template files (`.templ`), Go source files (`.go`), and assets (`.css`/`.js`), automatically generating components, bundling via `esbuild`, and restarting the server process seamlessly.
+Monitors `.templ`, `.go`, `.css`, and `.js` files, auto-compiling templates, bundling assets via `esbuild`, and live-reloading the application.
 
 ### Production Build
 ```bash
 ./ztatic build
 ```
 Executes the production build pipeline:
-1. `templ generate` compiles components to Go bytecode.
+1. `templ generate` compiles templates to Go code.
 2. `esbuild` bundles and minifies JS/CSS assets targeting ES2022.
 3. Content-hash manifest (`manifest.json`) is generated.
 4. `go build -ldflags="-s -w" -trimpath` creates a zero-dependency static binary.
-
-Deploy the resulting `bin/server` binary anywhere—no extra assets or runtime dependencies required!
-
----
-
-## Performance Benchmarks
-
-Benchmark results executed on AMD64 Linux (12th Gen Intel i5-12450H):
-
-| Subsystem | Operation | Latency | Memory Overhead |
-| :--- | :--- | :--- | :--- |
-| **Asset Pipeline** | Manifest Hash Lookup (`AssetURL`) | **356.3 ns/op** | 64 B/op (3 allocs) |
-| **Realtime Engine** | SSE Broadcast (100 Subscribers) | **4.6 µs/op** | ~46 ns / subscriber |
-| **Data Engine** | Generic CRUD Identification | **0.005 ms** | Zero Heap Leaks |
 
 ---
 
