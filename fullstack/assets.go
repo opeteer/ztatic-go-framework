@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -101,15 +100,8 @@ func AssetURL(assetPath string) string {
 }
 
 // MountAssets is a convenience builder for wiring the asset manager quickly.
-func MountAssets(e *echo.Echo, dirPath string, isDev bool) error {
-	var fileSystem fs.FS
-	if isDev {
-		fileSystem = os.DirFS(dirPath)
-	} else {
-		// In a real application, you would pass your //go:embed fs.FS here
-		fileSystem = os.DirFS(dirPath) // Fallback for demonstration
-	}
-
+// In development, you can pass os.DirFS("dist"). In production, pass the embed.FS.
+func MountAssets(e *echo.Echo, fileSystem fs.FS, isDev bool) error {
 	am, err := NewAssetManager(fileSystem, isDev, "/static")
 	if err != nil {
 		return err
