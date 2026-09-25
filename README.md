@@ -15,9 +15,9 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 
 - **Zero Node.js Dependency**: Built-in Go bindings to `esbuild` transpile TypeScript, bundle JavaScript, and compile CSS in sub-10ms directly in memory.
 - **HTML Over The Wire (HOTW)**: Stream reactive HTML updates straight from Go using **Templ** templates and **Hotwire Turbo 8**, keeping client-side state lightweight.
-- **Automated REST & OpenAPI 3.0**: Introspects registered routes and Go struct validation tags to generate OpenAPI 3.0.3 documentation rendered interactively via **Scalar UI**.
+- **Automated REST & OpenAPI 3.0**: Introspects registered routes and Go struct validation tags to generate OpenAPI 3.0.3 documentation rendered interactively via **Scalar UI**, with full support for recursive embedded struct property flattening.
 - **Realtime Multi-Node Events**: Push DOM mutations instantly over Server-Sent Events (SSE) or WebSockets using in-memory or distributed **Redis Pub/Sub** brokers.
-- **Built-in Security Defaults**: Out-of-the-box WAF payload inspection, nonces-based Content Security Policy (CSP), Double-Submit CSRF, Argon2id password hashing, and field-level AES-256 encryption.
+- **Built-in Security Defaults**: Out-of-the-box WAF with deep payload inspection (URIs and request bodies up to 128KB), multiline XSS protection, HTML event-handler blocking, recursive URL unescaping, SQL comment stripping, nonces-based CSP, Double-Submit CSRF, Argon2id password hashing, and field-level AES-256 encryption.
 - **Single Binary Artifact**: Deploy everything—assets, views, database migrations, and backend logic—as a single zero-dependency static executable.
 
 ---
@@ -26,7 +26,7 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 
 ### 1. Rapid REST API & OpenAPI 3.0 Engine (`rapid`)
 * **Dynamic Route Introspection:** Introspects registered routes and normalizes Echo path parameter syntax (`/users/:id` → `/users/{id}`).
-* **Reflection & Tag Parsing Engine:** Inspects Go struct `json` and `validate` tags (e.g., `required`, `email`, `min`, `max`, `len`) to produce OpenAPI 3.0.3 JSON schemas with cyclic pointer protection.
+* **Reflection & Tag Parsing Engine:** Inspects Go struct `json` and `validate` tags (e.g., `required`, `email`, `min`, `max`, `len`) to produce OpenAPI 3.0.3 JSON schemas with cyclic pointer protection and automatic property merging for embedded anonymous structs.
 * **Scaffolded Controllers:** `rapid.RegisterResource[T]` automatically mounts type-safe REST CRUD endpoints (`GET`, `POST`, `PUT`, `DELETE`) with pre-registered OpenAPI documentation.
 * **Interactive Scalar UI:** Serves dynamic API documentation rendered by Scalar at `/docs` and raw JSON schemas at `/docs/openapi.json`.
 
@@ -48,7 +48,7 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **HTTPS/TLS Reverse Proxy:** Proxy middleware supports custom `crypto/tls.Config` settings (`InsecureSkipVerify`, custom CAs) for both HTTP reverse proxying (`proxyHTTP`) and raw WebSocket TLS tunneling (`proxyRaw`).
 
 ### 6. Security Suite (`security`)
-* **WAF & Security Headers:** Inspects incoming payloads, injects nonces-based CSP, HSTS, and Double-Submit Cookie CSRF protection.
+* **WAF & Security Headers:** Inspects incoming URIs and request payload bodies (up to 128KB) for SQLi and XSS, performs recursive URL unescaping and SQL comment normalization, and injects nonces-based CSP, HSTS, and Double-Submit Cookie CSRF protection.
 * **Data Privacy:** AES-256-GCM struct tag encryption (`ztatic:"encrypt"`), Argon2id password hashing, and zero-allocation PII masking for `slog`.
 
 ### 7. Developer CLI (`ztatic`)
@@ -118,7 +118,7 @@ func main() {
 	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Engine, "/docs")
 
 	// Define application routes
-	app.GET("/", func(c ztatic.Context) error {
+	app.GET("/", func(c *ztatic.Context) error {
 		return c.String(200, "Welcome to Ztatic Framework!")
 	})
 

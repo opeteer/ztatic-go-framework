@@ -59,8 +59,8 @@ Before writing code, it is essential to understand how Ztatic operates under the
 2. **HTML Over The Wire (HOTW)**: Instead of sending JSON and executing heavy client-side JavaScript frameworks, Ztatic renders type-safe Go components using **Templ** and streams DOM mutations over HTTP via **Hotwire Turbo 8**.
 3. **Smart Layout Unwrapping**: During navigation inside `<turbo-frame>` containers, Ztatic automatically detects frame request headers (`Turbo-Frame`) and bypasses outer HTML layout rendering, reducing bandwidth consumption by up to 80%.
 4. **Real-Time Push without JS Boilerplate**: By linking Server-Sent Events (SSE) or WebSockets directly to Hotwire Turbo Streams (`<turbo-stream-from src="/sse?topic=room">`), the backend can mutate client DOM elements instantly without requiring custom client JavaScript code.
-5. **Dynamic OpenAPI 3.0 Generation**: Introspects Echo routes and struct validation tags (`json` and `validate`) using Go reflection to automatically build OpenAPI 3.0.3 specs rendered interactively via **Scalar UI**.
-6. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) payload inspection, nonces-based Content Security Policy (CSP), Argon2id password hashing, AES-256-GCM field encryption, and zero-allocation PII log masking out of the box.
+5. **Dynamic OpenAPI 3.0 Generation**: Introspects Echo routes and struct validation tags (`json` and `validate`) using Go reflection to automatically build OpenAPI 3.0.3 specs rendered interactively via **Scalar UI**, with recursive property merging for embedded anonymous structs.
+6. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) deep payload inspection (inspecting URIs and request bodies up to 128KB), multiline XSS protection, HTML event-handler blocking, recursive URL unescaping, SQL comment normalization, nonces-based Content Security Policy (CSP), Argon2id password hashing, AES-256-GCM field encryption, and zero-allocation PII log masking out of the box.
 
 ---
 
@@ -94,12 +94,12 @@ mywebsite/
 
 | Module Package | Path | Responsibilities |
 | :--- | :--- | :--- |
-| **`ztatic`** | [`ztatic.go`](file:///home/opeteer/ztatic-go-framework/ztatic.go) | Central engine constructor (`NewSecure()`), pre-wiring WAF, CSRF, CSP, and rate limiting onto Echo v5. |
+| **`ztatic`** | [`ztatic.go`](file:///home/opeteer/ztatic-go-framework/ztatic.go) | Central engine constructor (`NewSecure()`), exporting convenience type aliases (`Context`, `HandlerFunc`, `Map`, `Group`), pre-wiring WAF, CSRF, CSP, and rate limiting onto Echo v5. |
 | **`fullstack`** | [`fullstack/`](file:///home/opeteer/ztatic-go-framework/fullstack) | Layout rendering (`RenderLayout`), Turbo Stream responses (`RenderTurboStream`), asset pipeline (`MountAssets`, `esbuild`), and content hashing manifest. |
 | **`realtime`** | [`realtime/`](file:///home/opeteer/ztatic-go-framework/realtime) | Memory and Redis Pub/Sub brokers (`MemoryBroker`, `RedisBroker`), SSE Handler (`SSEHandler`), and WebSocket Handler (`WebSocketHandler`). |
-| **`security`** | [`security/`](file:///home/opeteer/ztatic-go-framework/security) | WAF inspection engine, security response headers, hardened CSRF middleware, Argon2id hashing, and AES-256 field encryption. |
+| **`security`** | [`security/`](file:///home/opeteer/ztatic-go-framework/security) | WAF inspection engine (deep URI & request body payload scanning, multiline XSS, HTML event attributes, SQL comment normalization), security response headers, hardened CSRF middleware, Argon2id hashing, and AES-256 field encryption. |
 | **`data`** | [`data/`](file:///home/opeteer/ztatic-go-framework/data) | Database pool wrapper (`DBEngine`), Squirrel query builder (`squirrel.StatementBuilderType`), generic `BaseRepository[T]`, and Goose embedded SQL migrations (`RunMigrations`). |
-| **`rapid`** | [`rapid/`](file:///home/opeteer/ztatic-go-framework/rapid) | Automatic RESTful controller mapping (`RegisterResource`), OpenAPI 3.0 generation (`OpenAPIGenerator`), reflection tag parsing, and Scalar UI docs rendering. |
+| **`rapid`** | [`rapid/`](file:///home/opeteer/ztatic-go-framework/rapid) | Automatic RESTful controller mapping (`RegisterResource`), OpenAPI 3.0 generation (`OpenAPIGenerator`) with recursive anonymous struct property merging, reflection tag parsing, and Scalar UI docs rendering. |
 | **`echo`** | [`echo/`](file:///home/opeteer/ztatic-go-framework/echo) | Core router with radix tree node compaction (`Remove`), and HTTPS/TLS reverse proxying (`proxyHTTP`, `proxyRaw`). |
 
 ---
@@ -384,7 +384,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v5"
+	"ztatic-go-framework"
 	"ztatic-go-framework/fullstack"
 	"ztatic-go-framework/realtime"
 	"mywebsite/internal/models"
@@ -395,7 +395,7 @@ type ArticleController struct {
 	Broker realtime.EventBroker
 }
 
-func (ac *ArticleController) Create(c *echo.Context) error {
+func (ac *ArticleController) Create(c *ztatic.Context) error {
 	newArticle := models.Article{
 		ID:        time.Now().Nanosecond(),
 		Title:     c.FormValue("title"),
