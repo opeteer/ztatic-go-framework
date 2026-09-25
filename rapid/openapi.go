@@ -260,9 +260,26 @@ func buildSchemaFromType(t reflect.Type, visited map[reflect.Type]string) (schem
 			// Flatten embedded anonymous structs
 			if field.Anonymous {
 				_, fieldDefs := buildSchemaFromType(field.Type, visited)
-				// Simplified anonymous embedding support - in a full impl you'd merge the properties
 				for k, v := range fieldDefs {
 					definitions[k] = v
+				}
+				
+				// Extract the embedded struct type name, handling pointers
+				embedType := field.Type
+				for embedType.Kind() == reflect.Pointer {
+					embedType = embedType.Elem()
+				}
+				
+				// Merge properties and required fields into parent
+				if embedDef, ok := fieldDefs[embedType.Name()].(map[string]any); ok {
+					if embedProps, ok := embedDef["properties"].(map[string]any); ok {
+						for k, v := range embedProps {
+							props[k] = v
+						}
+					}
+					if embedReq, ok := embedDef["required"].([]string); ok {
+						req = append(req, embedReq...)
+					}
 				}
 				continue
 			}

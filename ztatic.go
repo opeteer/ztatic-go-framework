@@ -14,6 +14,12 @@ type Engine struct {
 	*echo.Echo
 }
 
+// DX Type Aliases to match README.md and simplify developer usage
+type Context = echo.Context
+type HandlerFunc = echo.HandlerFunc
+type Map map[string]any
+type Group = echo.Group
+
 // NewSecure initializes a new Ztatic Engine pre-wired with the complete
 // Zero-Trust Web Security Suite. It is safe by default.
 func NewSecure() *Engine {
