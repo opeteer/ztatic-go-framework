@@ -17,23 +17,32 @@ type Engine struct {
 // NewSecure initializes a new Ztatic Engine pre-wired with the complete
 // Zero-Trust Web Security Suite. It is safe by default.
 func NewSecure() *Engine {
+	return NewWithConfig(DefaultConfig())
+}
+
+// NewWithConfig initializes a new Ztatic Engine with the provided configuration.
+func NewWithConfig(cfg Config) *Engine {
 	e := echo.New()
 	
 	// Core robust middleware
 	e.Use(middleware.Recover())
 	
 	// Phase 2: Web Security Hardening Pipeline
-	// 1. Zero-Trust Security Headers (CSP, HSTS, COOP, CORP, etc.)
-	e.Use(web.SecureHeaders())
+	if cfg.Security.EnableHeaders {
+		e.Use(web.SecureHeadersWithConfig(cfg.Security.Headers))
+	}
 	
-	// 2. Web Application Firewall (WAF) for SQLi, XSS, and Traversal protection
-	e.Use(web.WAF())
+	if cfg.Security.EnableWAF {
+		e.Use(web.WAFWithConfig(cfg.Security.WAF))
+	}
 	
-	// 3. Hardened CSRF Protection (SameSite=Strict, Secure)
-	e.Use(web.HardenedCSRF())
+	if cfg.Security.EnableCSRF {
+		e.Use(web.HardenedCSRFWithConfig(cfg.Security.CSRF))
+	}
 	
-	// 4. Adaptive Rate Limiting to prevent DoS attacks
-	e.Use(web.AdaptiveRateLimiter())
+	if cfg.Security.EnableRateLimiter {
+		e.Use(web.AdaptiveRateLimiterWithConfig(cfg.Security.RateLimiter))
+	}
 	
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
