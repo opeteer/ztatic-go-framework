@@ -35,6 +35,7 @@ const (
 	StreamRemove  TurboStreamAction = "remove"
 	StreamBefore  TurboStreamAction = "before"
 	StreamAfter   TurboStreamAction = "after"
+	StreamRefresh TurboStreamAction = "refresh"
 )
 
 // TurboStreamItem represents a single DOM mutation fragment.
