@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/Masterminds/squirrel"
 )
 
 // ErrNotFound is returned when a query expects a row but none is found.
@@ -32,17 +34,20 @@ func NewBaseRepository[T any](db *DBEngine, tableName string) *BaseRepository[T]
 // FindByID retrieves a single entity by its primary key (ID).
 // It accepts a custom scanFn to map the SQL columns into the generic Struct T.
 func (r *BaseRepository[T]) FindByID(ctx context.Context, id any, scanFn func(row Scanner, entity *T) error) (*T, error) {
-	// In production with squirrel enabled, this would dynamically build:
-	// query, args, _ := r.DB.Builder.Select("*").From(r.TableName).Where(squirrel.Eq{"id": id}).ToSql()
+	query, args, err := r.DB.Builder.
+		Select("*").
+		From(r.TableName).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
 	
-	// Fallback raw query for sandbox (assumes standard ? placeholder)
-	query := "SELECT * FROM " + r.TableName + " WHERE id = ?"
-	
-	row := r.DB.SQL.QueryRowContext(ctx, query, id)
+	if err != nil {
+		return nil, err
+	}
+
+	row := r.DB.SQL.QueryRowContext(ctx, query, args...)
 	
 	var entity T
-	err := scanFn(row, &entity)
-	if err != nil {
+	if err := scanFn(row, &entity); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -54,9 +59,16 @@ func (r *BaseRepository[T]) FindByID(ctx context.Context, id any, scanFn func(ro
 
 // DeleteByID removes a record by its primary key.
 func (r *BaseRepository[T]) DeleteByID(ctx context.Context, id any) error {
-	query := "DELETE FROM " + r.TableName + " WHERE id = ?"
+	query, args, err := r.DB.Builder.
+		Delete(r.TableName).
+		Where(squirrel.Eq{"id": id}).
+		ToSql()
 	
-	result, err := r.DB.SQL.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	result, err := r.DB.SQL.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}

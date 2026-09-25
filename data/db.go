@@ -4,16 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-)
+	"strings"
 
-// In a non-sandbox production environment, you would uncomment this to use Squirrel
-// import "github.com/Masterminds/squirrel"
+	"github.com/Masterminds/squirrel"
+)
 
 // DBEngine wraps the standard database/sql connection pool and provides
 // integrated transaction management and query building capabilities.
 type DBEngine struct {
-	SQL *sql.DB
-	// Builder squirrel.StatementBuilderType // Configured for PostgreSQL ($1) or MySQL (?)
+	SQL     *sql.DB
+	Builder squirrel.StatementBuilderType
+	Dialect string
 }
 
 // NewDBEngine initializes a new database connection pool.
@@ -28,9 +29,18 @@ func NewDBEngine(driverName, dataSourceName string) (*DBEngine, error) {
 		return nil, fmt.Errorf("ztatic/data: failed to ping db: %w", err)
 	}
 
+	var builder squirrel.StatementBuilderType
+	driverLower := strings.ToLower(driverName)
+	if strings.Contains(driverLower, "postgres") || strings.Contains(driverLower, "pgx") {
+		builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar).RunWith(db)
+	} else {
+		builder = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question).RunWith(db)
+	}
+
 	return &DBEngine{
-		SQL: db,
-		// Builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar).RunWith(db),
+		SQL:     db,
+		Builder: builder,
+		Dialect: driverName,
 	}, nil
 }
 

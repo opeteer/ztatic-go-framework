@@ -4,10 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"io/fs"
-)
 
-// In a non-sandbox production environment, uncomment this:
-// import "github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3"
+)
 
 // MigrationEngine handles safe, version-controlled database schema migrations.
 // It is designed to read .sql migration files directly from a Go 1.16+ embed.FS,
@@ -23,32 +22,24 @@ func NewMigrationEngine(db *sql.DB) *MigrationEngine {
 
 // RunMigrations applies all pending schema migrations found in the embedded filesystem.
 func (m *MigrationEngine) RunMigrations(fileSystem fs.FS, dir string, dialect string) error {
-	// --- Stub Implementation ---
-	// Due to sandbox network restrictions, goose/v3 is not installed.
-	// Production code would look like this:
-	/*
-		goose.SetBaseFS(fileSystem)
-		if err := goose.SetDialect(dialect); err != nil {
-			return fmt.Errorf("failed to set dialect: %w", err)
-		}
-		if err := goose.Up(m.db, dir); err != nil {
-			return fmt.Errorf("failed to run migrations: %w", err)
-		}
-		return nil
-	*/
-
-	fmt.Printf("ztatic/data: [Simulated] Applied migrations for dialect '%s' from directory '%s'\n", dialect, dir)
+	goose.SetBaseFS(fileSystem)
+	if err := goose.SetDialect(dialect); err != nil {
+		return fmt.Errorf("ztatic/data: failed to set dialect %s: %w", dialect, err)
+	}
+	if err := goose.Up(m.db, dir); err != nil {
+		return fmt.Errorf("ztatic/data: failed to run migrations: %w", err)
+	}
 	return nil
 }
 
 // Rollback reverts the most recently applied migration (Goose Down).
-func (m *MigrationEngine) Rollback(dir string) error {
-	/*
-		if err := goose.Down(m.db, dir); err != nil {
-			return fmt.Errorf("failed to rollback migration: %w", err)
-		}
-		return nil
-	*/
-	fmt.Printf("ztatic/data: [Simulated] Rolled back last migration in directory '%s'\n", dir)
+func (m *MigrationEngine) Rollback(fileSystem fs.FS, dir string, dialect string) error {
+	goose.SetBaseFS(fileSystem)
+	if err := goose.SetDialect(dialect); err != nil {
+		return fmt.Errorf("ztatic/data: failed to set dialect %s: %w", dialect, err)
+	}
+	if err := goose.Down(m.db, dir); err != nil {
+		return fmt.Errorf("ztatic/data: failed to rollback migration: %w", err)
+	}
 	return nil
 }

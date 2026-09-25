@@ -2,6 +2,7 @@ package rapid
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/labstack/echo/v5"
 )
@@ -20,28 +21,49 @@ type Resource[T any] interface {
 // generic Resource interface. It automatically integrates Ztatic's `BindAndValidate`.
 func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 	group := g.Group(path)
+	
+	// Introspect type T for OpenAPI docs
+	var item T
+	itemType := reflect.TypeOf(item)
+	for itemType != nil && itemType.Kind() == reflect.Pointer {
+		itemType = itemType.Elem()
+	}
+	typeName := "Resource"
+	if itemType != nil {
+		typeName = itemType.Name()
+	}
 
 	// GET /resource - FindAll
-	group.GET("", func(c *echo.Context) error {
+	rFindAll := group.GET("", func(c *echo.Context) error {
 		items, err := res.FindAll(c)
 		if err != nil {
 			return err
 		}
 		return c.JSON(http.StatusOK, items)
 	})
+	DefaultOpenAPIGenerator.RegisterRouteMeta(rFindAll.Method, rFindAll.Path, RouteMetadata{
+		Summary:      "Find all " + typeName + "s",
+		Tags:         []string{typeName},
+		ResponseType: reflect.SliceOf(itemType),
+	})
 
 	// GET /resource/:id - FindByID
-	group.GET("/:id", func(c *echo.Context) error {
-		id := c.PathParam("id")
+	rFindByID := group.GET("/:id", func(c *echo.Context) error {
+		id := c.Param("id")
 		item, err := res.FindByID(c, id)
 		if err != nil {
 			return err
 		}
 		return c.JSON(http.StatusOK, item)
 	})
+	DefaultOpenAPIGenerator.RegisterRouteMeta(rFindByID.Method, rFindByID.Path, RouteMetadata{
+		Summary:      "Find " + typeName + " by ID",
+		Tags:         []string{typeName},
+		ResponseType: itemType,
+	})
 
 	// POST /resource - Create
-	group.POST("", func(c *echo.Context) error {
+	rCreate := group.POST("", func(c *echo.Context) error {
 		var item T
 		// Ztatic DX: Automatically binds the payload and executes struct validation tags.
 		if err := BindAndValidate(c, &item); err != nil {
@@ -54,10 +76,16 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		}
 		return c.JSON(http.StatusCreated, created)
 	})
+	DefaultOpenAPIGenerator.RegisterRouteMeta(rCreate.Method, rCreate.Path, RouteMetadata{
+		Summary:      "Create " + typeName,
+		Tags:         []string{typeName},
+		RequestType:  itemType,
+		ResponseType: itemType,
+	})
 
 	// PUT /resource/:id - Update
-	group.PUT("/:id", func(c *echo.Context) error {
-		id := c.PathParam("id")
+	rUpdate := group.PUT("/:id", func(c *echo.Context) error {
+		id := c.Param("id")
 		var item T
 		
 		if err := BindAndValidate(c, &item); err != nil {
@@ -70,13 +98,23 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		}
 		return c.JSON(http.StatusOK, updated)
 	})
+	DefaultOpenAPIGenerator.RegisterRouteMeta(rUpdate.Method, rUpdate.Path, RouteMetadata{
+		Summary:      "Update " + typeName,
+		Tags:         []string{typeName},
+		RequestType:  itemType,
+		ResponseType: itemType,
+	})
 
 	// DELETE /resource/:id - Delete
-	group.DELETE("/:id", func(c *echo.Context) error {
-		id := c.PathParam("id")
+	rDelete := group.DELETE("/:id", func(c *echo.Context) error {
+		id := c.Param("id")
 		if err := res.Delete(c, id); err != nil {
 			return err
 		}
 		return c.NoContent(http.StatusNoContent)
+	})
+	DefaultOpenAPIGenerator.RegisterRouteMeta(rDelete.Method, rDelete.Path, RouteMetadata{
+		Summary: "Delete " + typeName,
+		Tags:    []string{typeName},
 	})
 }
