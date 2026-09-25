@@ -104,6 +104,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"ztatic-go-framework"
 	"ztatic-go-framework/fullstack"
@@ -115,10 +116,10 @@ func main() {
 	app := ztatic.NewSecure()
 
 	// Mount static asset pipeline
-	fullstack.MountAssets(app.Engine, assets.FS, true)
+	fullstack.MountAssets(app.Echo, os.DirFS("dist"), true)
 
 	// Expose interactive OpenAPI documentation at /docs
-	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Engine, "/docs")
+	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
 
 	// Define application routes
 	app.GET("/", func(c *ztatic.Context) error {
@@ -148,7 +149,7 @@ Mount REST CRUD endpoints in one call:
 ```go
 // Automatically registers GET /, GET /:id, POST /, PUT /:id, DELETE /:id
 // and generates OpenAPI schemas in /docs/openapi.json
-rapid.RegisterResource(app.Group("/api/products"), "products", productRepo)
+rapid.RegisterResource(app.Group("/api"), "products", productRepo)
 ```
 
 ### 2. Real-Time Updates via SSE & WebSockets

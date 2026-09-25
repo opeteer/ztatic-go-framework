@@ -94,7 +94,7 @@ func (am *AssetManager) GetURL(assetPath string) string {
 func AssetURL(assetPath string) string {
 	if DefaultAssetManager == nil {
 		// Fallback if AssetManager was not initialized
-		return "/static/" + assetPath
+		return "/static/" + strings.TrimPrefix(assetPath, "/")
 	}
 	return DefaultAssetManager.GetURL(assetPath)
 }

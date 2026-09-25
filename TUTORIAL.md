@@ -199,7 +199,6 @@ package repositories
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/Masterminds/squirrel"
 	"ztatic-go-framework/data"
@@ -245,6 +244,12 @@ func (r *ArticleRepository) FindByAuthor(ctx context.Context, author string) ([]
 	return articles, nil
 }
 ```
+
+> [!TIP]
+> After setting up your database models and repository, run `go mod tidy` in your project root to download the required data tier dependencies (`squirrel` and `goose`):
+> ```bash
+> go mod tidy
+> ```
 
 ---
 
@@ -359,10 +364,10 @@ import (
 func RegisterAPI(app *ztatic.Engine, articleRepo *repositories.ArticleRepository) {
 	// Automatically registers GET /, GET /:id, POST /, PUT /:id, DELETE /:id
 	// and extracts struct tags (json & validate) for OpenAPI 3.0 docs!
-	rapid.RegisterResource(app.Group("/api/articles"), "articles", articleRepo)
+	rapid.RegisterResource(app.Group("/api"), "articles", articleRepo)
 
 	// Serve interactive Scalar API documentation UI at /docs
-	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Engine, "/docs")
+	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
 }
 ```
 

@@ -20,7 +20,12 @@ type Resource[T any] interface {
 // RESTful endpoints (GET, POST, PUT, DELETE) onto an Echo Group for the given 
 // generic Resource interface. It automatically integrates Ztatic's `BindAndValidate`.
 func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
-	group := g.Group(path)
+	var group *echo.Group
+	if path == "" || path == "/" {
+		group = g
+	} else {
+		group = g.Group(path)
+	}
 	
 	// Introspect type T for OpenAPI docs
 	var item T
