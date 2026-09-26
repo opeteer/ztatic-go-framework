@@ -424,3 +424,112 @@ func TestUX_Task8_WebSocket_DevWorkflow(t *testing.T) {
 		t.Logf("[UX CHECK] Cross-origin frontend dev server WS connection blocked: %d Forbidden (Expected by CSWSH, but requires documentation for allowed origins in dev)", respDev.StatusCode)
 	}
 }
+
+// -----------------------------------------------------------------------------
+// USER JOURNEY TEST 9: Comprehensive End-to-End Developer Workflow
+// -----------------------------------------------------------------------------
+
+// TestUX_EndToEnd_DeveloperJourney simulates a complete user journey reading TUTORIAL.md
+// and assembling the entire application: layout, forms, REST API, Scalar docs, SSE, and encryption.
+func TestUX_EndToEnd_DeveloperJourney(t *testing.T) {
+	// 1. Initialize Zero-Trust security engine
+	app := ztatic.NewSecure()
+
+	// 2. Configure 32-byte field encryption key
+	key := []byte("12345678901234567890123456789012")
+	_, err := app.SetCipherKey(key)
+	if err != nil {
+		t.Fatalf("failed to set cipher key: %v", err)
+	}
+
+	// 3. Initialize real-time broker & generic repo
+	broker := realtime.NewMemoryBroker()
+	repo := data.NewBaseRepository[TutorialArticle](nil, "articles")
+
+	// 4. Mount OpenAPI docs & REST CRUD
+	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
+	rapid.RegisterResource(app.Group("/api"), "articles", repo)
+
+	// 5. Register application routes
+	app.GET("/", func(c *ztatic.Context) error {
+		return c.String(http.StatusOK, "Home Page")
+	})
+	app.GET("/sse", realtime.SSEHandler(broker))
+
+	var createdArticles []TutorialArticle
+	app.POST("/articles", func(c *ztatic.Context) error {
+		article := TutorialArticle{
+			ID:      100,
+			Title:   c.FormValue("title"),
+			Content: c.FormValue("content"),
+			Author:  "QA Developer",
+		}
+		createdArticles = append(createdArticles, article)
+		return c.String(http.StatusOK, "Created: "+article.Title)
+	})
+
+	// --- PHASE A: Homepage Access & Security Headers Inspection ---
+	reqHome := httptest.NewRequest(http.MethodGet, "/", nil)
+	recHome := httptest.NewRecorder()
+	app.ServeHTTP(recHome, reqHome)
+
+	if recHome.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200 for homepage, got %d", recHome.Code)
+	}
+	csp := recHome.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "'unsafe-eval'") {
+		t.Errorf("expected CSP to allow 'unsafe-eval' for Alpine.js, got %s", csp)
+	}
+
+	// --- PHASE B: Scalar Documentation UI & Nonce Inspection ---
+	reqDocs := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	recDocs := httptest.NewRecorder()
+	app.ServeHTTP(recDocs, reqDocs)
+
+	if recDocs.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200 for /docs, got %d", recDocs.Code)
+	}
+	docsBody := recDocs.Body.String()
+	if !strings.Contains(docsBody, "nonce=") {
+		t.Errorf("expected Scalar docs HTML to contain nonce on scripts, got: %s", docsBody)
+	}
+
+	// --- PHASE C: REST API JSON CRUD Interaction (curl / Postman) ---
+	reqAPI := httptest.NewRequest(http.MethodGet, "/api/articles", nil)
+	recAPI := httptest.NewRecorder()
+	app.ServeHTTP(recAPI, reqAPI)
+	if recAPI.Code == http.StatusBadRequest || recAPI.Code == http.StatusForbidden {
+		t.Fatalf("REST API GET /api/articles blocked by CSRF: %d", recAPI.Code)
+	}
+
+	// --- PHASE D: Web Form Submission with Technical Content ---
+	form := url.Values{}
+	form.Set("title", "How to execute commands in Go")
+	form.Set("content", "Learn os/exec -- fast and reliable. Priority one = highest.")
+
+	reqForm := httptest.NewRequest(http.MethodPost, "/articles", strings.NewReader(form.Encode()))
+	reqForm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqForm.Header.Set("Sec-Fetch-Site", "same-origin")
+	recForm := httptest.NewRecorder()
+	app.ServeHTTP(recForm, reqForm)
+
+	if recForm.Code != http.StatusOK {
+		t.Fatalf("expected form submit with technical content to succeed, got %d: %s", recForm.Code, recForm.Body.String())
+	}
+	if len(createdArticles) != 1 {
+		t.Fatalf("expected 1 created article, got %d", len(createdArticles))
+	}
+
+	// --- PHASE E: Field Encryption Verification ---
+	encField := crypto.EncryptedString("sensitive-token-12345")
+	encryptedVal, err := encField.Value()
+	if err != nil {
+		t.Fatalf("encryption failed: %v", err)
+	}
+	if encryptedVal == "sensitive-token-12345" || encryptedVal == "" {
+		t.Fatalf("expected encrypted ciphertext, got plaintext: %v", encryptedVal)
+	}
+
+	t.Logf("[E2E VERIFIED] Complete developer journey succeeded with zero friction across all modules!")
+}
+
