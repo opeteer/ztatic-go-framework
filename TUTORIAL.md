@@ -435,6 +435,12 @@ func (ac *ArticleController) Create(c *ztatic.Context) error {
 }
 ```
 
+> [!TIP]
+> After adding your real-time controller and importing the `realtime` package, run `go mod tidy` in your project root to resolve event broker dependencies:
+> ```bash
+> go mod tidy
+> ```
+
 ---
 
 ## Step 7: Asset Management & Client Micro-Interactions
