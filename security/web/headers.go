@@ -1,11 +1,16 @@
 package web
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"io"
+	"strings"
+
 	"github.com/labstack/echo/v5"
 )
 
-// SecureHeaders returns a middleware with relaxed security headers for optimal speed
-// and compatibility with external CDNs and frontend frameworks.
+// SecureHeaders returns a middleware with security headers for optimal speed
+// and modern web protection (HSTS, CSP nonces, nosniff, frame options).
 func SecureHeaders() echo.MiddlewareFunc {
 	return SecureHeadersWithConfig(DefaultHeaderConfig())
 }
@@ -33,15 +38,46 @@ func SecureHeadersWithConfig(cfg HeaderConfig) echo.MiddlewareFunc {
 			if cfg.FrameOptions != "" {
 				res.Header().Set("X-Frame-Options", cfg.FrameOptions)
 			}
-			if cfg.ContentSecurityPolicy != "" {
-				res.Header().Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
+			if cfg.StrictTransportSecurity != "" {
+				res.Header().Set("Strict-Transport-Security", cfg.StrictTransportSecurity)
 			}
 			if cfg.ReferrerPolicy != "" {
 				res.Header().Set("Referrer-Policy", cfg.ReferrerPolicy)
+			}
+
+			csp := cfg.ContentSecurityPolicy
+			if cfg.EnableCSPNonce {
+				nonceBytes := make([]byte, 16)
+				if _, err := io.ReadFull(rand.Reader, nonceBytes); err == nil {
+					nonce := base64.RawStdEncoding.EncodeToString(nonceBytes)
+					c.Set("csp_nonce", nonce)
+					if strings.Contains(csp, "{NONCE}") {
+						csp = strings.ReplaceAll(csp, "{NONCE}", nonce)
+					} else if strings.Contains(csp, "script-src") {
+						csp = strings.Replace(csp, "script-src", "script-src 'nonce-"+nonce+"'", 1)
+					} else if csp != "" {
+						csp = csp + "; script-src 'nonce-" + nonce + "'"
+					}
+				}
+			}
+			if csp != "" {
+				res.Header().Set("Content-Security-Policy", csp)
 			}
 
 			return next(c)
 		}
 	}
 }
+
+// GetCSPNonce extracts the per-request CSP nonce from context if present.
+func GetCSPNonce(c *echo.Context) string {
+	if c == nil {
+		return ""
+	}
+	if nonce, ok := c.Get("csp_nonce").(string); ok {
+		return nonce
+	}
+	return ""
+}
+
 

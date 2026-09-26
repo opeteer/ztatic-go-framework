@@ -7,6 +7,7 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/labstack/echo/v5"
+	"ztatic-go-framework/security/crypto"
 )
 
 // ErrNotFound is returned when a query expects a row but none is found.
@@ -20,20 +21,47 @@ type Scanner interface {
 // BaseRepository provides highly-reusable, generic CRUD operations for any data model.
 // Utilizing Go 1.18+ Generics, it eliminates boilerplate SQL rewriting for standard tables.
 type BaseRepository[T any] struct {
-	DB        *DBEngine
-	TableName string
+	DB          *DBEngine
+	TableName   string
+	CipherSuite *crypto.CipherSuite
 }
 
 // NewBaseRepository instantiates a generic repository for the specified SQL table.
 func NewBaseRepository[T any](db *DBEngine, tableName string) *BaseRepository[T] {
 	return &BaseRepository[T]{
-		DB:        db,
-		TableName: tableName,
+		DB:          db,
+		TableName:   tableName,
+		CipherSuite: crypto.GetDefaultCipherSuite(),
 	}
+}
+
+// EncryptModel encrypts fields tagged with `ztatic:"encrypt"` on the provided model.
+func (r *BaseRepository[T]) EncryptModel(entity *T) error {
+	cs := r.CipherSuite
+	if cs == nil {
+		cs = crypto.GetDefaultCipherSuite()
+	}
+	if cs == nil {
+		return errors.New("ztatic/data: cipher suite is uninitialized for model encryption; call app.SetCipherKey(...)")
+	}
+	return crypto.ProcessStruct(entity, cs, true)
+}
+
+// DecryptModel decrypts fields tagged with `ztatic:"encrypt"` on the provided model.
+func (r *BaseRepository[T]) DecryptModel(entity *T) error {
+	cs := r.CipherSuite
+	if cs == nil {
+		cs = crypto.GetDefaultCipherSuite()
+	}
+	if cs == nil {
+		return errors.New("ztatic/data: cipher suite is uninitialized for model decryption; call app.SetCipherKey(...)")
+	}
+	return crypto.ProcessStruct(entity, cs, false)
 }
 
 // QueryByID retrieves a single entity by its primary key (ID).
 // It accepts a custom scanFn to map the SQL columns into the generic Struct T.
+// If the entity has fields tagged with `ztatic:"encrypt"`, they are automatically decrypted.
 func (r *BaseRepository[T]) QueryByID(ctx context.Context, id any, scanFn func(row Scanner, entity *T) error) (*T, error) {
 	query, args, err := r.DB.Builder.
 		Select("*").
@@ -54,6 +82,8 @@ func (r *BaseRepository[T]) QueryByID(ctx context.Context, id any, scanFn func(r
 		}
 		return nil, err
 	}
+
+	_ = r.DecryptModel(&entity)
 
 	return &entity, nil
 }

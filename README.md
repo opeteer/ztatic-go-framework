@@ -48,8 +48,8 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **HTTPS/TLS Reverse Proxy:** Proxy middleware supports custom `crypto/tls.Config` settings (`InsecureSkipVerify`, custom CAs) for both HTTP reverse proxying (`proxyHTTP`) and raw WebSocket TLS tunneling (`proxyRaw`).
 
 ### 6. Security Suite (`security`)
-* **WAF & Security Headers:** Inspects incoming URIs and request payload bodies (up to 128KB) for SQLi and XSS, performs recursive URL unescaping and SQL comment normalization, and injects nonces-based CSP, HSTS, and Double-Submit Cookie CSRF protection.
-* **Data Privacy:** AES-256-GCM struct tag encryption (`ztatic:"encrypt"`), Argon2id password hashing, and zero-allocation PII masking for `slog`.
+* **WAF & Security Headers:** Inspects incoming URIs and request payload bodies (up to 128KB) for SQLi and XSS with 413 oversized body enforcement, performs resilient URL unescaping and SQL comment normalization, injects per-request nonce-based CSP (`fullstack.Nonce(c)`), HSTS (`Strict-Transport-Security`), and hardened Double-Submit Cookie CSRF protection (`HttpOnly` with automatic `/api/` and `/docs` skipping).
+* **Data Privacy:** AES-256-GCM database field encryption (`crypto.EncryptedString` and `ztatic:"encrypt"` via `BaseRepository`, initialized with `app.SetCipherKey` or `ZTATIC_CIPHER_KEY`), Argon2id password hashing, and PII scrubbing for `slog`.
 
 ### 7. Developer CLI (`ztatic`)
 * **Cobra CLI Suite:** Built on `spf13/cobra` for scaffolding, running, and building applications.

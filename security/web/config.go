@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -23,17 +24,20 @@ type Config struct {
 
 // HeaderConfig defines the configuration for the SecureHeaders middleware.
 type HeaderConfig struct {
-	Skipper               middleware.Skipper
-	XSSProtection         string
-	ContentTypeOptions    string
-	FrameOptions          string
-	ContentSecurityPolicy string
-	ReferrerPolicy        string
+	Skipper                 middleware.Skipper
+	XSSProtection           string
+	ContentTypeOptions      string
+	FrameOptions            string
+	ContentSecurityPolicy   string
+	StrictTransportSecurity string
+	EnableCSPNonce          bool
+	ReferrerPolicy          string
 }
 
 // WAFConfig defines the configuration for the Web Application Firewall middleware.
 type WAFConfig struct {
-	Skipper middleware.Skipper
+	Skipper     middleware.Skipper
+	MaxBodySize int64
 }
 
 // DefaultConfig returns the standard security-hardened configuration.
@@ -54,30 +58,36 @@ func DefaultConfig() Config {
 // DefaultHeaderConfig returns the default configuration for SecureHeaders.
 func DefaultHeaderConfig() HeaderConfig {
 	return HeaderConfig{
-		Skipper:               middleware.DefaultSkipper,
-		XSSProtection:         "1; mode=block",
-		ContentTypeOptions:    "nosniff",
-		FrameOptions:          "SAMEORIGIN",
-		ContentSecurityPolicy: "default-src * 'unsafe-inline' 'unsafe-eval' blob: data:; font-src * data:; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval' blob:;",
-		ReferrerPolicy:        "no-referrer-when-downgrade",
+		Skipper:                 middleware.DefaultSkipper,
+		XSSProtection:           "1; mode=block",
+		ContentTypeOptions:      "nosniff",
+		FrameOptions:            "SAMEORIGIN",
+		StrictTransportSecurity: "max-age=31536000; includeSubDomains",
+		EnableCSPNonce:          true,
+		ContentSecurityPolicy:   "default-src 'self'; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-eval' https:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss:;",
+		ReferrerPolicy:          "no-referrer-when-downgrade",
 	}
 }
 
 // DefaultWAFConfig returns the default configuration for the WAF.
 func DefaultWAFConfig() WAFConfig {
 	return WAFConfig{
-		Skipper: middleware.DefaultSkipper,
+		Skipper:     middleware.DefaultSkipper,
+		MaxBodySize: 128 * 1024,
 	}
 }
 
 // DefaultCSRFConfig returns the default configuration for CSRF protection.
 func DefaultCSRFConfig() middleware.CSRFConfig {
 	return middleware.CSRFConfig{
-		Skipper:        middleware.DefaultSkipper,
+		Skipper: func(c *echo.Context) bool {
+			path := c.Request().URL.Path
+			return strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/docs")
+		},
 		TokenLookup:    "header:X-CSRF-Token,form:_csrf",
 		CookiePath:     "/",
 		CookieSecure:   false,
-		CookieHTTPOnly: false,
+		CookieHTTPOnly: true,
 		CookieSameSite: http.SameSiteLaxMode,
 	}
 }

@@ -60,7 +60,7 @@ Before writing code, it is essential to understand how Ztatic operates under the
 3. **Smart Layout Unwrapping**: During navigation inside `<turbo-frame>` containers, Ztatic automatically detects frame request headers (`Turbo-Frame`) and bypasses outer HTML layout rendering, reducing bandwidth consumption by up to 80%.
 4. **Real-Time Push without JS Boilerplate**: By linking Server-Sent Events (SSE) or WebSockets directly to Hotwire Turbo Streams (`<turbo-stream-from src="/sse?topic=room">`), the backend can mutate client DOM elements instantly without requiring custom client JavaScript code.
 5. **Dynamic OpenAPI 3.0 Generation**: Introspects Echo routes and struct validation tags (`json` and `validate`) using Go reflection to automatically build OpenAPI 3.0.3 specs rendered interactively via **Scalar UI**, with recursive property merging for embedded anonymous structs.
-6. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) deep payload inspection (inspecting URIs and request bodies up to 128KB), multiline XSS protection, HTML event-handler blocking, recursive URL unescaping, SQL comment normalization, nonces-based Content Security Policy (CSP), Argon2id password hashing, AES-256-GCM field encryption, and zero-allocation PII log masking out of the box.
+6. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) payload inspection (URIs and request bodies up to 128KB with 413 oversized rejection), multiline XSS protection, targeted HTML event-handler blocking, resilient URL unescaping, SQL comment normalization, per-request nonce-based Content Security Policy (`fullstack.Nonce(c)`), HSTS, hardened CSRF (`HttpOnly` with automatic `/api/` and `/docs` skipping, and `fullstack.CSRFField(c)` helpers), Argon2id password hashing, and AES-256-GCM database field encryption (`crypto.EncryptedString` initialized via `app.SetCipherKey` or `ZTATIC_CIPHER_KEY`).
 
 ---
 
@@ -171,6 +171,9 @@ type Article struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 ```
+
+> [!TIP]
+> **Field-Level Encryption**: To encrypt sensitive fields (e.g., API keys, tokens) at rest using AES-256-GCM, tag fields with `ztatic:"encrypt"` or use the `crypto.EncryptedString` type. Configure your 32-byte key in code via `app.SetCipherKey([]byte("..."))` or set the `ZTATIC_CIPHER_KEY` environment variable.
 
 ### 2. Embedded SQL Migrations (`db/migrations/00001_create_articles_table.sql`)
 
@@ -476,6 +479,8 @@ templ CreateArticleModal() {
 			<div @click.away="open = false" class="bg-white p-6 rounded-lg w-96 shadow-xl">
 				<h3 class="text-lg font-bold mb-4">Create New Article</h3>
 				<form action="/articles" method="POST" @submit="open = false">
+					<!-- Note: In browser sessions, modern browsers send Sec-Fetch-Site: same-origin automatically. -->
+					<!-- To explicitly bind CSRF tokens in forms, you can include fullstack.CSRFField(c) -->
 					<input type="text" name="title" placeholder="Title" required class="w-full mb-3 p-2 border rounded"/>
 					<textarea name="content" placeholder="Content" required class="w-full mb-3 p-2 border rounded"></textarea>
 					<div class="flex justify-end space-x-2">

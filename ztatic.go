@@ -1,10 +1,13 @@
 package ztatic
 
 import (
+	"os"
+
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	
 	"ztatic-go-framework/rapid"
+	"ztatic-go-framework/security/crypto"
 	"ztatic-go-framework/security/web"
 )
 
@@ -12,6 +15,21 @@ import (
 // with enterprise-grade Zero-Trust Security defaults.
 type Engine struct {
 	*echo.Echo
+}
+
+// SetCipherSuite configures the AES-256-GCM cipher suite on the engine and sets it as default for field encryption.
+func (eng *Engine) SetCipherSuite(cs *crypto.CipherSuite) {
+	crypto.SetDefaultCipherSuite(cs)
+}
+
+// SetCipherKey initializes an AES-256-GCM cipher suite from a 32-byte key and enables field encryption.
+func (eng *Engine) SetCipherKey(key []byte) (*crypto.CipherSuite, error) {
+	cs, err := crypto.NewCipherSuite(key)
+	if err != nil {
+		return nil, err
+	}
+	crypto.SetDefaultCipherSuite(cs)
+	return cs, nil
 }
 
 // DX Type Aliases to match README.md and simplify developer usage
@@ -53,7 +71,17 @@ func NewWithConfig(cfg Config) *Engine {
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
 	
-	return &Engine{Echo: e}
+	eng := &Engine{Echo: e}
+
+	// Auto-configure AES-256 field encryption cipher suite if environment variable is present
+	if keyStr := os.Getenv("ZTATIC_CIPHER_KEY"); keyStr != "" {
+		keyBytes := []byte(keyStr)
+		if len(keyBytes) == 32 {
+			_, _ = eng.SetCipherKey(keyBytes)
+		}
+	}
+
+	return eng
 }
 
 // New creates a raw Ztatic Engine without the full security pipeline,

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 )
@@ -13,15 +13,21 @@ import (
 var (
 	// sqliPatterns detects severe SQL Injection payloads
 	sqliPatterns = []*regexp.Regexp{
-		// Hardened: using \s* around words allows catching 'union  select' or 'union select' after comments are stripped
-		regexp.MustCompile(`(?i)\b(union\s+select|drop\s+table|exec\s+)\b`),
+		regexp.MustCompile(`(?i)\bunion\s*(all\s+|distinct\s+)?select\b`),
+		regexp.MustCompile(`(?i)(;\s*|\b(union|select)\b.*?)\b(drop\s+(table|database)|truncate\s+table|alter\s+table)\b`),
+		regexp.MustCompile(`(?i)\b(exec|execute)\s*(xp_\w+|sp_\w+|immediate|master\.|\(@?|@\w+)`),
+		regexp.MustCompile(`(?i)\b(waitfor\s+delay|pg_sleep\s*\(|sleep\s*\()\b`),
+		regexp.MustCompile(`(?i)('\s*(or|and)\s*'?\d+'?\s*=\s*'?\d+'?|'\s*(or|and)\s*'\w+'\s*=\s*'\w+')`),
+		regexp.MustCompile(`(?i)('\s*(or|and)\s*.*?--|'\s*--|;\s*--)`),
 	}
 
 	// xssPatterns detects severe Cross-Site Scripting (XSS) payloads
 	xssPatterns = []*regexp.Regexp{
-		regexp.MustCompile(`(?is)<script>.*?</script>`), // Hardened: (?is) makes dot match newlines
-		regexp.MustCompile(`(?i)javascript:`),
-		regexp.MustCompile(`(?i)\bon\w+\s*=`), // Hardened: catches HTML event handlers like onerror=, onload=
+		regexp.MustCompile(`(?is)<\s*script\b[^>]*>`),
+		regexp.MustCompile(`(?is)<\s*/\s*script\s*>`),
+		regexp.MustCompile(`(?i)javascript\s*:`),
+		regexp.MustCompile(`(?i)\bon(load|error|click|dblclick|mouse\w+|key\w+|focus\w*|blur|change|submit|input|pointer\w+|drag\w+|touch\w+)\s*=`),
+		regexp.MustCompile(`(?is)<\s*(iframe|object|embed)\b[^>]*>`),
 	}
 
 	// sqlCommentPattern matches SQL inline comments /* ... */
@@ -41,6 +47,10 @@ func WAFWithConfig(cfg WAFConfig) echo.MiddlewareFunc {
 	if cfg.Skipper == nil {
 		cfg.Skipper = DefaultWAFConfig().Skipper
 	}
+	maxBody := cfg.MaxBodySize
+	if maxBody <= 0 {
+		maxBody = maxWAFBodySize
+	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
@@ -57,14 +67,24 @@ func WAFWithConfig(cfg WAFConfig) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusForbidden, "Forbidden: Security policy violation")
 			}
 
-			// 2. Check Request Body (for POST/PUT/PATCH with payload)
-			if req.Body != nil && req.ContentLength > 0 && req.ContentLength <= maxWAFBodySize {
-				bodyBytes, err := io.ReadAll(io.LimitReader(req.Body, maxWAFBodySize))
-				if err == nil && len(bodyBytes) > 0 {
+			// 2. Check Request Body (for POST/PUT/PATCH with payload, including chunked)
+			if req.Body != nil && req.ContentLength != 0 {
+				if req.ContentLength > maxBody {
+					c.Logger().Warn("WAF blocked oversized request body", "size", req.ContentLength, "limit", maxBody, "ip", c.RealIP())
+					return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Payload Too Large: Security inspection limit exceeded")
+				}
+
+				bodyBytes, err := io.ReadAll(io.LimitReader(req.Body, maxBody+1))
+				if err == nil {
 					// Restore the body stream immediately for downstream handlers
-					req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-					
-					if isMalicious(string(bodyBytes)) {
+					req.Body = io.NopCloser(io.MultiReader(bytes.NewReader(bodyBytes), req.Body))
+
+					if int64(len(bodyBytes)) > maxBody {
+						c.Logger().Warn("WAF blocked oversized body stream", "limit", maxBody, "ip", c.RealIP())
+						return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Payload Too Large: Security inspection limit exceeded")
+					}
+
+					if len(bodyBytes) > 0 && isMalicious(string(bodyBytes)) {
 						c.Logger().Warn("WAF blocked malicious request body", "ip", c.RealIP())
 						return echo.NewHTTPError(http.StatusForbidden, "Forbidden: Security policy violation")
 					}
@@ -76,13 +96,50 @@ func WAFWithConfig(cfg WAFConfig) echo.MiddlewareFunc {
 	}
 }
 
-// recursiveQueryUnescape mitigates double-encoding WAF bypasses.
+func isHex(c byte) bool {
+	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
+}
+
+func unhex(c byte) byte {
+	switch {
+	case '0' <= c && c <= '9':
+		return c - '0'
+	case 'a' <= c && c <= 'f':
+		return c - 'a' + 10
+	case 'A' <= c && c <= 'F':
+		return c - 'A' + 10
+	}
+	return 0
+}
+
+func resilientQueryUnescape(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '%':
+			if i+2 < len(s) && isHex(s[i+1]) && isHex(s[i+2]) {
+				b.WriteByte(unhex(s[i+1])<<4 | unhex(s[i+2]))
+				i += 2
+			} else {
+				b.WriteByte('%')
+			}
+		case '+':
+			b.WriteByte(' ')
+		default:
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}
+
+// recursiveQueryUnescape mitigates double-encoding WAF bypasses resiliently.
 func recursiveQueryUnescape(input string) string {
 	maxDepth := 5
 	prev := input
 	for i := 0; i < maxDepth; i++ {
-		decoded, err := url.QueryUnescape(prev)
-		if err != nil || decoded == prev {
+		decoded := resilientQueryUnescape(prev)
+		if decoded == prev {
 			return prev
 		}
 		prev = decoded
@@ -106,15 +163,17 @@ func isMalicious(input string) bool {
 		}
 	}
 
-	// Hardened: strip SQL comments before checking SQLi signatures to prevent obfuscation bypass
-	inputWithoutComments := sqlCommentPattern.ReplaceAllString(input, " ")
+	// Strip SQL comments in two formats: collapsed ("") and spaced (" ") to catch split tokens
+	inputCommentsSpaced := sqlCommentPattern.ReplaceAllString(input, " ")
+	inputCommentsCollapsed := sqlCommentPattern.ReplaceAllString(input, "")
 
 	// SQLi Check
 	for _, p := range sqliPatterns {
-		if p.MatchString(inputWithoutComments) {
+		if p.MatchString(input) || p.MatchString(inputCommentsSpaced) || p.MatchString(inputCommentsCollapsed) {
 			return true
 		}
 	}
 
 	return false
 }
+

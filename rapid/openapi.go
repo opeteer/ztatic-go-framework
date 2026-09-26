@@ -1,6 +1,7 @@
 package rapid
 
 import (
+	"html"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -60,20 +61,25 @@ func (o *OpenAPIGenerator) ServeDocs(e *echo.Echo, prefix string) {
 
 	// Serve the interactive documentation UI
 	e.GET(prefix, func(c *echo.Context) error {
+		escapedTitle := html.EscapeString(o.Title)
+		nonceAttr := ""
+		if nonce, ok := c.Get("csp_nonce").(string); ok && nonce != "" {
+			nonceAttr = ` nonce="` + nonce + `"`
+		}
 		html := `<!DOCTYPE html>
 <html>
   <head>
-    <title>` + o.Title + ` API Reference</title>
+    <title>` + escapedTitle + ` API Reference</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
   </head>
   <body>
     <!-- Renders the API documentation dynamically from the JSON endpoint -->
-    <script 
+    <script` + nonceAttr + ` 
       id="api-reference" 
       data-url="` + prefix + `/openapi.json">
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script` + nonceAttr + ` src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
   </body>
 </html>`
 		return c.HTML(http.StatusOK, html)

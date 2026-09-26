@@ -1,10 +1,78 @@
 package crypto
 
 import (
+	"database/sql/driver"
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 )
+
+var (
+	defaultCipherSuiteMu sync.RWMutex
+	defaultCipherSuite   *CipherSuite
+)
+
+// SetDefaultCipherSuite sets the framework-wide default cipher suite for field encryption.
+func SetDefaultCipherSuite(cs *CipherSuite) {
+	defaultCipherSuiteMu.Lock()
+	defer defaultCipherSuiteMu.Unlock()
+	defaultCipherSuite = cs
+}
+
+// GetDefaultCipherSuite returns the framework-wide default cipher suite.
+func GetDefaultCipherSuite() *CipherSuite {
+	defaultCipherSuiteMu.RLock()
+	defer defaultCipherSuiteMu.RUnlock()
+	return defaultCipherSuite
+}
+
+// EncryptedString is a string type implementing database/sql driver.Valuer and sql.Scanner.
+// It automatically encrypts data when saving to the database and decrypts when reading.
+type EncryptedString string
+
+// Value implements driver.Valuer to encrypt the string before database persistence.
+func (es EncryptedString) Value() (driver.Value, error) {
+	if es == "" {
+		return "", nil
+	}
+	cs := GetDefaultCipherSuite()
+	if cs == nil {
+		return nil, errors.New("ztatic/crypto: default cipher suite is uninitialized (call app.SetCipherKey to enable field encryption)")
+	}
+	return cs.Encrypt(string(es))
+}
+
+// Scan implements sql.Scanner to decrypt the string upon retrieval from the database.
+func (es *EncryptedString) Scan(value any) error {
+	if value == nil {
+		*es = ""
+		return nil
+	}
+	var raw string
+	switch v := value.(type) {
+	case string:
+		raw = v
+	case []byte:
+		raw = string(v)
+	default:
+		return errors.New("ztatic/crypto: invalid scan source for EncryptedString")
+	}
+	if raw == "" {
+		*es = ""
+		return nil
+	}
+	cs := GetDefaultCipherSuite()
+	if cs == nil {
+		return errors.New("ztatic/crypto: default cipher suite is uninitialized (call app.SetCipherKey to decrypt field)")
+	}
+	decrypted, err := cs.Decrypt(raw)
+	if err != nil {
+		return err
+	}
+	*es = EncryptedString(decrypted)
+	return nil
+}
 
 const ztaticTag = "ztatic"
 
