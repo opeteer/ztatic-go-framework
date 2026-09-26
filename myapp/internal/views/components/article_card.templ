@@ -1,0 +1,33 @@
+package components
+
+import (
+	"fmt"
+	"myapp/internal/models"
+)
+
+templ ArticleCard(article models.Article) {
+	<div id={ fmt.Sprintf("article-%d", article.ID) } class="p-4 border-b border-gray-200 hover:bg-gray-50">
+		<h2 class="text-lg font-semibold text-blue-700">{ article.Title }</h2>
+		<p class="text-gray-600 mt-1">{ article.Content }</p>
+		<div class="text-xs text-gray-400 mt-2">
+			By { article.Author } on { article.CreatedAt.Format("Jan 02, 2006") }
+		</div>
+	</div>
+}
+
+templ ArticleList(articles []models.Article) {
+	<div>
+		<div class="flex justify-between items-center mb-4">
+			<h1 class="text-2xl font-bold">Latest Articles</h1>
+		</div>
+
+		<!-- Turbo Stream SSE Listener for Real-Time Updates -->
+		<turbo-stream-from src="/sse?topic=articles"></turbo-stream-from>
+
+		<div id="articles-container" class="divide-y divide-gray-200">
+			for _, article := range articles {
+				@ArticleCard(article)
+			}
+		</div>
+	</div>
+}

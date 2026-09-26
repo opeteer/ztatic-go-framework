@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/labstack/echo/v5"
@@ -117,30 +118,31 @@ func (r *BaseRepository[T]) DeleteByID(ctx context.Context, id any) error {
 }
 
 // --- rapid.Resource[T] Interface Default Implementations ---
-// These default methods ensure that any repository embedding BaseRepository[T] 
-// automatically satisfies the rapid.Resource[T] interface, allowing it to be 
-// mounted directly via rapid.RegisterResource. Developers can override these 
+// These default methods ensure that any repository embedding BaseRepository[T]
+// automatically satisfies the rapid.Resource[T] interface, allowing it to be
+// mounted directly via rapid.RegisterResource. Developers can override these
 // methods in their specific repositories to provide actual implementations.
+// Until overridden, callers receive HTTP 501 Not Implemented.
 
 func (r *BaseRepository[T]) FindAll(c *echo.Context) ([]T, error) {
-	return nil, errors.New("ztatic: FindAll not implemented in base repository")
+	return nil, echo.NewHTTPError(http.StatusNotImplemented, "ztatic: FindAll not implemented — override this method in your repository")
 }
 
 func (r *BaseRepository[T]) FindByID(c *echo.Context, id string) (T, error) {
 	var empty T
-	return empty, errors.New("ztatic: FindByID not implemented in base repository")
+	return empty, echo.NewHTTPError(http.StatusNotImplemented, "ztatic: FindByID not implemented — override this method in your repository")
 }
 
 func (r *BaseRepository[T]) Create(c *echo.Context, item *T) (T, error) {
 	var empty T
-	return empty, errors.New("ztatic: Create not implemented in base repository")
+	return empty, echo.NewHTTPError(http.StatusNotImplemented, "ztatic: Create not implemented — override this method in your repository")
 }
 
 func (r *BaseRepository[T]) Update(c *echo.Context, id string, item *T) (T, error) {
 	var empty T
-	return empty, errors.New("ztatic: Update not implemented in base repository")
+	return empty, echo.NewHTTPError(http.StatusNotImplemented, "ztatic: Update not implemented — override this method in your repository")
 }
 
 func (r *BaseRepository[T]) Delete(c *echo.Context, id string) error {
-	return errors.New("ztatic: Delete not implemented in base repository")
+	return echo.NewHTTPError(http.StatusNotImplemented, "ztatic: Delete not implemented — override this method in your repository")
 }

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../assets/css/app.css"],
+  "sourcesContent": ["body {\n    -webkit-font-smoothing: antialiased;\n}\n\n.turbo-progress-bar {\n    height: 3px;\n    background-color: #2563eb;\n}\n"],
+  "mappings": "AAAA,KACI,uBAAwB,WAC5B,CAEA,CAAC,mBACG,OAAQ,IACR,iBAAkB,OACtB",
+  "names": []
+}

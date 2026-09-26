@@ -15,6 +15,7 @@ import (
 // with enterprise-grade Zero-Trust Security defaults.
 type Engine struct {
 	*echo.Echo
+	wafCfg *web.WAFConfig // pointer allows SetMaxBodySize to adjust WAF limit after construction
 }
 
 // SetCipherSuite configures the AES-256-GCM cipher suite on the engine and sets it as default for field encryption.
@@ -30,6 +31,20 @@ func (eng *Engine) SetCipherKey(key []byte) (*crypto.CipherSuite, error) {
 	}
 	crypto.SetDefaultCipherSuite(cs)
 	return cs, nil
+}
+
+// SetMaxBodySize sets the WAF's maximum allowed request body size in bytes.
+// Call this before starting the server. The default is 128 KB (131072 bytes).
+//
+// Example:
+//
+//	app := ztatic.NewSecure()
+//	app.SetMaxBodySize(4 * 1024 * 1024) // Allow up to 4 MB
+//	log.Fatal(app.Start(":8080"))
+func (eng *Engine) SetMaxBodySize(bytes int64) {
+	if eng.wafCfg != nil {
+		eng.wafCfg.MaxBodySize = bytes
+	}
 }
 
 // DX Type Aliases to match README.md and simplify developer usage
@@ -56,8 +71,10 @@ func NewWithConfig(cfg Config) *Engine {
 		e.Use(web.SecureHeadersWithConfig(cfg.Security.Headers))
 	}
 	
+	// WAFConfig is stored by pointer so SetMaxBodySize can adjust it at runtime.
+	wafCfgCopy := cfg.Security.WAF
 	if cfg.Security.EnableWAF {
-		e.Use(web.WAFWithConfig(cfg.Security.WAF))
+		e.Use(web.WAFWithConfigPtr(&wafCfgCopy))
 	}
 	
 	if cfg.Security.EnableCSRF {
@@ -71,7 +88,7 @@ func NewWithConfig(cfg Config) *Engine {
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
 	
-	eng := &Engine{Echo: e}
+	eng := &Engine{Echo: e, wafCfg: &wafCfgCopy}
 
 	// Auto-configure AES-256 field encryption cipher suite if environment variable is present
 	if keyStr := os.Getenv("ZTATIC_CIPHER_KEY"); keyStr != "" {

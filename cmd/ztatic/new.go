@@ -18,9 +18,20 @@ var newCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		projectName := args[0]
-		fmt.Printf("🚀 Scaffolding new Ztatic project: %s\n", projectName)
-		
+		// Derive a valid Go module name: use only the base segment so that absolute
+		// paths like "/tmp/myapp" or "../myapp" produce "module myapp" in go.mod.
+		moduleName := filepath.Base(filepath.ToSlash(projectName))
+		if moduleName == "." || moduleName == "/" || moduleName == "" {
+			fmt.Printf("❌ Invalid project name %q — please use a simple name like 'myapp'\n", projectName)
+			os.Exit(1)
+		}
+		fmt.Printf("🚀 Scaffolding new Ztatic project: %s\n", moduleName)
+
 		baseDir := filepath.Join(newDir, projectName)
+		absBaseDir, err := filepath.Abs(baseDir)
+		if err != nil {
+			absBaseDir = baseDir
+		}
 
 		// Define the standard architectural directory structure
 		dirs := []string{
@@ -132,20 +143,23 @@ import (
 		}
 
 		// Generate go.mod
-		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire (\n\tgithub.com/a-h/templ v0.3.1020\n\tztatic-go-framework v0.0.0\n)\n\nreplace ztatic-go-framework => %s\n", projectName, replacePath)
+		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire (\n\tgithub.com/a-h/templ v0.3.1020\n\tztatic-go-framework v0.0.0\n)\n\nreplace ztatic-go-framework => %s\n", moduleName, replacePath)
 		if err := os.WriteFile(filepath.Join(baseDir, "go.mod"), []byte(modContent), 0644); err != nil {
 			fmt.Printf("Error writing go.mod: %v\n", err)
 		}
 
-		// Run go mod tidy
+		// Run go mod tidy — pipe output so the developer can see what happens
 		cmdTidy := exec.Command("go", "mod", "tidy")
 		cmdTidy.Dir = baseDir
+		cmdTidy.Stdout = os.Stdout
+		cmdTidy.Stderr = os.Stderr
 		if err := cmdTidy.Run(); err != nil {
-			fmt.Printf("Warning: failed to run 'go mod tidy': %v\n", err)
+			fmt.Printf("⚠️  'go mod tidy' failed: %v\n", err)
+			fmt.Println("   Tip: In air-gapped/offline environments, run: GOSUMDB=off go mod tidy")
 		}
 
 		fmt.Println("✅ Project scaffolded successfully!")
-		fmt.Printf("Next steps:\n  cd %s\n  ztatic dev\n", baseDir)
+		fmt.Printf("Next steps:\n  cd %s\n  ztatic dev\n", absBaseDir)
 	},
 }
 

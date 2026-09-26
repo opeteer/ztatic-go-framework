@@ -49,6 +49,12 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 
 ### 6. Security Suite (`security`)
 * **WAF & Security Headers:** Inspects incoming URIs and request payload bodies (up to 128KB) for SQLi and XSS with 413 oversized body enforcement, performs resilient URL unescaping and SQL comment normalization, injects per-request nonce-based CSP (`fullstack.Nonce(c)`), HSTS (`Strict-Transport-Security`), and hardened Double-Submit Cookie CSRF protection (`HttpOnly` with automatic `/api/` and `/docs` skipping).
+* **WAF Body Limit:** The WAF enforces a default **128 KB** maximum request body for security inspection. For endpoints that accept larger payloads (document uploads, rich content), call `SetMaxBodySize` before starting the server:
+  ```go
+  app := ztatic.NewSecure()
+  app.SetMaxBodySize(4 * 1024 * 1024) // Allow up to 4 MB
+  log.Fatal(app.Start(":8080"))
+  ```
 * **Data Privacy:** AES-256-GCM database field encryption (`crypto.EncryptedString` and `ztatic:"encrypt"` via `BaseRepository`, initialized with `app.SetCipherKey` or `ZTATIC_CIPHER_KEY`), Argon2id password hashing, and PII scrubbing for `slog`.
 
 ### 7. Developer CLI (`ztatic`)

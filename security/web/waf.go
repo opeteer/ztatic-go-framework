@@ -96,6 +96,64 @@ func WAFWithConfig(cfg WAFConfig) echo.MiddlewareFunc {
 	}
 }
 
+// WAFWithConfigPtr returns a WAF middleware that reads MaxBodySize from the config pointer
+// on every request. This allows Engine.SetMaxBodySize to adjust the WAF body limit
+// after the engine is constructed, without rewiring the middleware chain.
+func WAFWithConfigPtr(cfg *WAFConfig) echo.MiddlewareFunc {
+	skipper := cfg.Skipper
+	if skipper == nil {
+		skipper = DefaultWAFConfig().Skipper
+	}
+
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			if skipper(c) {
+				return next(c)
+			}
+
+			// Read MaxBodySize dynamically from the pointer so SetMaxBodySize takes effect.
+			maxBody := cfg.MaxBodySize
+			if maxBody <= 0 {
+				maxBody = maxWAFBodySize
+			}
+
+			req := c.Request()
+
+			// 1. Check Request URI
+			uri := req.URL.RequestURI()
+			if isMalicious(uri) {
+				c.Logger().Warn("WAF blocked malicious URI", "uri", uri, "ip", c.RealIP())
+				return echo.NewHTTPError(http.StatusForbidden, "Forbidden: Security policy violation")
+			}
+
+			// 2. Check Request Body
+			if req.Body != nil && req.ContentLength != 0 {
+				if req.ContentLength > maxBody {
+					c.Logger().Warn("WAF blocked oversized request body", "size", req.ContentLength, "limit", maxBody, "ip", c.RealIP())
+					return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Payload Too Large: Security inspection limit exceeded")
+				}
+
+				bodyBytes, err := io.ReadAll(io.LimitReader(req.Body, maxBody+1))
+				if err == nil {
+					req.Body = io.NopCloser(io.MultiReader(bytes.NewReader(bodyBytes), req.Body))
+
+					if int64(len(bodyBytes)) > maxBody {
+						c.Logger().Warn("WAF blocked oversized body stream", "limit", maxBody, "ip", c.RealIP())
+						return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Payload Too Large: Security inspection limit exceeded")
+					}
+
+					if len(bodyBytes) > 0 && isMalicious(string(bodyBytes)) {
+						c.Logger().Warn("WAF blocked malicious request body", "ip", c.RealIP())
+						return echo.NewHTTPError(http.StatusForbidden, "Forbidden: Security policy violation")
+					}
+				}
+			}
+
+			return next(c)
+		}
+	}
+}
+
 func isHex(c byte) bool {
 	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }

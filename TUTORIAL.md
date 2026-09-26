@@ -393,6 +393,17 @@ Ztatic supports real-time event broadcasting over Server-Sent Events (SSE) and W
 - **`MemoryBroker`**: Ideal for single-server setups (`realtime.NewMemoryBroker()`).
 - **`RedisBroker`**: Ideal for distributed multi-node clusters (`realtime.NewRedisBroker(redisClient)` using `go-redis/v9`).
 
+> [!TIP]
+> **Local Frontend Development (WebSocket CORS):** By default, `realtime.WebSocketHandler` enforces
+> same-origin verification to prevent Cross-Site WebSocket Hijacking (CSWSH). If your frontend
+> dev server runs on a different port (e.g., Vite on `localhost:5173`), allowlist it explicitly:
+> ```go
+> app.GET("/ws", realtime.WebSocketHandlerWithConfig(broker, realtime.WebSocketConfig{
+>     AllowedOrigins: []string{"http://localhost:5173"},
+> }))
+> ```
+> Remove or restrict `AllowedOrigins` before deploying to production.
+
 ### 2. Broadcasting Real-Time Turbo Streams
 
 ```go
@@ -546,6 +557,15 @@ func main() {
 	log.Fatal(app.Start(":8080"))
 }
 ```
+
+> [!TIP]
+> **WAF Body Limit:** `NewSecure()` enforces a default **128 KB** maximum request body for WAF
+> inspection. If your application accepts larger payloads (document imports, image uploads),
+> configure the limit right after `ztatic.NewSecure()` and before `app.Start()`:
+> ```go
+> app := ztatic.NewSecure()
+> app.SetMaxBodySize(4 * 1024 * 1024) // Allow up to 4 MB
+> ```
 
 ---
 

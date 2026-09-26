@@ -1,0 +1,38 @@
+package layouts
+
+import "ztatic-go-framework/fullstack"
+
+templ AppLayout(content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>My Ztatic Website</title>
+		
+		<!-- Loaded from native esbuild pipeline -->
+		<link rel="stylesheet" href={ fullstack.AssetURL("app.css") }/>
+		<script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.0-beta.2/dist/turbo.es2017-umd.js"></script>
+		<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+	</head>
+	<body class="bg-gray-100 text-gray-900 font-sans">
+		<header class="bg-blue-600 text-white p-4 shadow-md">
+			<div class="container mx-auto flex justify-between items-center">
+				<h1 class="text-xl font-bold">Ztatic Site</h1>
+				<nav class="space-x-4">
+					<a href="/" class="hover:underline">Home</a>
+					<a href="/docs" class="hover:underline">API Docs</a>
+				</nav>
+			</div>
+		</header>
+
+		<main class="container mx-auto my-8 p-4 bg-white rounded shadow-sm">
+			@content
+		</main>
+
+		<footer class="text-center p-4 text-gray-500 text-sm">
+			Built with Ztatic Framework & HOTW Stack
+		</footer>
+	</body>
+	</html>
+}
