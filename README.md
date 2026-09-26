@@ -209,6 +209,21 @@ Executes the production build pipeline:
 
 ---
 
+## Air-Gapped & Corporate Environments
+
+If you are developing in strict corporate, offline, or sandbox environments where outbound network access to public proxies is restricted:
+- The Ztatic CLI (`ztatic new`) automatically seeds the project's `go.sum` and locks dependencies so initial generation and compilation work 100% offline.
+- If you need to run `go mod tidy` or `go build` without contacting Go's public checksum database (`sum.golang.org`), configure Go to bypass sumdb lookups:
+```bash
+export GOSUMDB=off
+```
+Or set it per command:
+```bash
+GOSUMDB=off go mod tidy
+```
+
+---
+
 ## License
 
 Distributed under the MIT License. See `LICENSE` for details.

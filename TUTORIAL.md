@@ -440,6 +440,7 @@ func (ac *ArticleController) Create(c *ztatic.Context) error {
 > ```bash
 > go mod tidy
 > ```
+> *(Note: In strict air-gapped or offline sandbox environments, use `GOSUMDB=off go mod tidy` if your network restricts outbound DNS to Go checksum servers).*
 
 ---
 

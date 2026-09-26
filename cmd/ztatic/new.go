@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -65,21 +66,73 @@ func main() {
 			fmt.Printf("Error writing main.go: %v\n", err)
 		}
 
-		// Generate tools.go to pre-wire and lock generator runtime dependencies (Templ)
+		// Generate tools.go to pre-wire and lock generator and framework runtime dependencies
 		toolsContent := `//go:build tools
 
 package main
 
 import (
 	_ "github.com/a-h/templ"
+	_ "ztatic-go-framework/data"
+	_ "ztatic-go-framework/realtime"
 )
 `
 		if err := os.WriteFile(filepath.Join(baseDir, "tools.go"), []byte(toolsContent), 0644); err != nil {
 			fmt.Printf("Error writing tools.go: %v\n", err)
 		}
 
+		// Locate framework root to seed go.sum and configure replace directive
+		var frameworkDir string
+		var frameworkSumData []byte
+
+		if cwd, err := os.Getwd(); err == nil {
+			if modBytes, err := os.ReadFile(filepath.Join(cwd, "go.mod")); err == nil {
+				if strings.Contains(string(modBytes), "module ztatic-go-framework") {
+					frameworkDir = cwd
+				}
+			}
+		}
+
+		if frameworkDir == "" {
+			for _, rel := range []string{".", "..", "../.."} {
+				if modBytes, err := os.ReadFile(filepath.Join(rel, "go.mod")); err == nil {
+					if strings.Contains(string(modBytes), "module ztatic-go-framework") {
+						if abs, err := filepath.Abs(rel); err == nil {
+							frameworkDir = abs
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if frameworkDir != "" {
+			frameworkSumData, _ = os.ReadFile(filepath.Join(frameworkDir, "go.sum"))
+		} else {
+			for _, sumPath := range []string{"go.sum", "../go.sum", filepath.Join(baseDir, "../go.sum")} {
+				if data, err := os.ReadFile(sumPath); err == nil && len(data) > 0 {
+					frameworkSumData = data
+					break
+				}
+			}
+		}
+
+		// Pre-seed go.sum before running go mod tidy for offline/air-gapped stability
+		if len(frameworkSumData) > 0 {
+			if err := os.WriteFile(filepath.Join(baseDir, "go.sum"), frameworkSumData, 0644); err != nil {
+				fmt.Printf("Warning: failed to seed go.sum: %v\n", err)
+			}
+		}
+
+		replacePath := "../"
+		if frameworkDir != "" {
+			if rel, err := filepath.Rel(baseDir, frameworkDir); err == nil {
+				replacePath = rel
+			}
+		}
+
 		// Generate go.mod
-		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire (\n\tgithub.com/a-h/templ v0.3.1020\n\tztatic-go-framework v0.0.0\n)\n\nreplace ztatic-go-framework => ../\n", projectName)
+		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire (\n\tgithub.com/a-h/templ v0.3.1020\n\tztatic-go-framework v0.0.0\n)\n\nreplace ztatic-go-framework => %s\n", projectName, replacePath)
 		if err := os.WriteFile(filepath.Join(baseDir, "go.mod"), []byte(modContent), 0644); err != nil {
 			fmt.Printf("Error writing go.mod: %v\n", err)
 		}
