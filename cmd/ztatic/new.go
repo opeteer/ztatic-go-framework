@@ -59,18 +59,42 @@ var newCmd = &cobra.Command{
 		// Create placeholder in dist directory so embed.FS or tools do not fail
 		_ = os.WriteFile(filepath.Join(baseDir, "dist", ".gitkeep"), []byte(""), 0644)
 
+		// Generate dist.go in project root to support single-binary //go:embed all:dist
+		distGoContent := fmt.Sprintf(`package %s
+
+import "embed"
+
+// DistFS embeds compiled static assets for zero-dependency single-binary deployment
+//go:embed all:dist
+var DistFS embed.FS
+`, moduleName)
+		if err := os.WriteFile(filepath.Join(baseDir, "dist.go"), []byte(distGoContent), 0644); err != nil {
+			fmt.Printf("Error writing dist.go: %v\n", err)
+		}
+
 		// Generate main.go stub
-		mainContent := `package main
+		mainContent := fmt.Sprintf(`package main
 
 import (
+	"io/fs"
 	"log"
 	"os"
 
 	"ztatic-go-framework"
+	"ztatic-go-framework/fullstack"
+	"%s"
 )
 
 func main() {
 	app := ztatic.NewSecure()
+
+	// Mount embedded assets from root dist.go for single-binary zero-dependency deployment
+	distSub, err := fs.Sub(%s.DistFS, "dist")
+	if err == nil {
+		fullstack.MountAssets(app.Echo, distSub, false)
+	} else {
+		fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)
+	}
 	
 	app.GET("/", func(c *ztatic.Context) error {
 		return c.String(200, "Welcome to Ztatic!")
@@ -80,9 +104,10 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	log.Printf("Ztatic application starting on :%%s...\n", port)
 	log.Fatal(app.Start(":" + port))
 }
-`
+`, moduleName, moduleName)
 		if err := os.WriteFile(filepath.Join(baseDir, "cmd/server", "main.go"), []byte(mainContent), 0644); err != nil {
 			fmt.Printf("Error writing main.go: %v\n", err)
 		}

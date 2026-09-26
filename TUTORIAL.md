@@ -336,6 +336,28 @@ templ ArticleCard(article models.Article) {
 	</div>
 }
 
+templ CreateArticleModal() {
+	<div x-data="{ open: false }">
+		<button @click="open = true" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition">
+			+ New Article
+		</button>
+
+		<div x-show="open" x-cloak class="fixed inset-0 bg-black/50 flex items-center justify-center">
+			<div @click.away="open = false" class="bg-white p-6 rounded-lg w-96 shadow-xl">
+				<h3 class="text-lg font-bold mb-4">Create New Article</h3>
+				<form action="/articles" method="POST" @submit="open = false">
+					<input type="text" name="title" placeholder="Title" required class="w-full mb-3 p-2 border rounded"/>
+					<textarea name="content" placeholder="Content" required class="w-full mb-3 p-2 border rounded"></textarea>
+					<div class="flex justify-end space-x-2">
+						<button type="button" @click="open = false" class="px-4 py-2 border rounded">Cancel</button>
+						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+}
+
 templ ArticleList(articles []models.Article) {
 	<div>
 		<div class="flex justify-between items-center mb-4">
@@ -483,7 +505,7 @@ body {
 
 ### 2. Micro-Interactions with Alpine.js
 
-Embed Alpine.js directly inside Templ components:
+Alpine.js directives work seamlessly inside Templ components. For instance, in `internal/views/components/article_card.templ` (created in Step 4), `CreateArticleModal()` utilizes Alpine.js for modal state and event handling:
 
 ```html
 templ CreateArticleModal() {
@@ -513,13 +535,29 @@ templ CreateArticleModal() {
 
 ### 3. Assembling the Application Server (`cmd/server/main.go`)
 
-Now tie all components together in `cmd/server/main.go`—mounting static assets, OpenAPI documentation, generic database repositories, and real-time event brokers:
+Now tie all components together in `cmd/server/main.go`—mounting static assets, OpenAPI documentation, generic database repositories, and real-time event brokers.
+
+#### Embedding Static Assets (`dist.go`)
+
+Go's standard library `//go:embed` directive cannot reference parent directories (`..`). Because `dist/` is generated at the project root while `main.go` resides in `cmd/server/`, `ztatic new` creates a root-level `dist.go` to cleanly embed the assets into the root package:
+
+```go
+// dist.go (located in project root)
+package mywebsite
+
+import "embed"
+
+// DistFS embeds compiled static assets for zero-dependency single-binary deployment
+//go:embed all:dist
+var DistFS embed.FS
+```
+
+In `cmd/server/main.go`, we import our root module `mywebsite` and mount the embedded sub-filesystem:
 
 ```go
 package main
 
 import (
-	"embed"
 	"io/fs"
 	"log"
 	"os"
@@ -528,6 +566,7 @@ import (
 	"ztatic-go-framework/fullstack"
 	"ztatic-go-framework/rapid"
 	"ztatic-go-framework/realtime"
+	"mywebsite"
 	"mywebsite/internal/controllers"
 	"mywebsite/internal/models"
 	"mywebsite/internal/repositories"
@@ -535,16 +574,12 @@ import (
 	"mywebsite/internal/views/layouts"
 )
 
-// Embed compiled static assets directly into the binary for zero-dependency single-binary deployment
-//go:embed all:dist
-var distFS embed.FS
-
 func main() {
 	// 1. Initialize Zero-Trust security engine
 	app := ztatic.NewSecure()
 
 	// 2. Mount static asset pipeline (embed.FS for production single-binary, os.DirFS for dev)
-	distSub, err := fs.Sub(distFS, "dist")
+	distSub, err := fs.Sub(mywebsite.DistFS, "dist")
 	if err == nil {
 		fullstack.MountAssets(app.Echo, distSub, false)
 	} else {
@@ -622,7 +657,7 @@ ztatic build
 
 ### Deploying the Binary
 
-Deploying to production requires zero external runtime dependencies or static folder uploads because `dist/` is compiled directly into the binary via `//go:embed all:dist`:
+Deploying to production requires zero external runtime dependencies or static folder uploads because `dist/` is compiled directly into the binary via root `dist.go` (`//go:embed all:dist`):
 
 ```bash
 # Copy binary to deployment host
