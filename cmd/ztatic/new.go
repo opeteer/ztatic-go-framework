@@ -88,9 +88,11 @@ import (
 func main() {
 	app := ztatic.NewSecure()
 
-	// Mount embedded assets from root dist.go for single-binary zero-dependency deployment
-	distSub, err := fs.Sub(%s.DistFS, "dist")
-	if err == nil {
+	// Mount assets: in development, use os.DirFS with live reload; in production, use root DistFS embed
+	isDev := os.Getenv("APP_ENV") == "development"
+	if isDev {
+		fullstack.MountAssets(app.Echo, os.DirFS("dist"), true)
+	} else if distSub, err := fs.Sub(%s.DistFS, "dist"); err == nil {
 		fullstack.MountAssets(app.Echo, distSub, false)
 	} else {
 		fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)

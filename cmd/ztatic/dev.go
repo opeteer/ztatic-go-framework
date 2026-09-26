@@ -277,7 +277,7 @@ func (s *DevServer) restartServerProcess() {
 	s.cmd = exec.Command("tmp/dev-server")
 	s.cmd.Stdout = os.Stdout
 	s.cmd.Stderr = os.Stderr
-	s.cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.Port))
+	s.cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.Port), "APP_ENV=development")
 	
 	if err := s.cmd.Start(); err != nil {
 		fmt.Printf("❌ Failed to start server: %v\n", err)

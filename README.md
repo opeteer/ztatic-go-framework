@@ -121,8 +121,9 @@ func main() {
 	// Initialize security-hardened engine
 	app := ztatic.NewSecure()
 
-	// Mount static asset pipeline
-	fullstack.MountAssets(app.Echo, os.DirFS("dist"), true)
+	// Mount static asset pipeline (development live reload vs production)
+	isDev := os.Getenv("APP_ENV") == "development"
+	fullstack.MountAssets(app.Echo, os.DirFS("dist"), isDev)
 
 	// Expose interactive OpenAPI documentation at /docs
 	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")

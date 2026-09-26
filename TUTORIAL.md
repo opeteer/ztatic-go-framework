@@ -250,7 +250,7 @@ func (r *ArticleRepository) FindByAuthor(ctx context.Context, author string) ([]
 
 > [!TIP]
 > **Database Initialization & Generic Stubs**:
-> - Initialize your database pool using `sql.Open("sqlite", "app.db")` and wrap it via `dbEngine := &data.DBEngine{SQL: sqlDB, Builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)}`.
+> - Initialize your database pool using `sql.Open("sqlite", "app.db")` and wrap it via `dbEngine := &data.DBEngine{SQL: sqlDB, Builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)}`. *(Note: when using SQLite with `database/sql`, import a pure-Go driver such as `_ "modernc.org/sqlite"`).*
 > - `BaseRepository[T]` implements default stubs for `rapid.Resource[T]` (`FindAll`, `FindByID`, `Create`, `Update`, `Delete`) returning `HTTP 501 Not Implemented`. Developers can selectively override these methods in `ArticleRepository` with SQL queries or Squirrel AST operations.
 
 > [!TIP]
@@ -578,9 +578,11 @@ func main() {
 	// 1. Initialize Zero-Trust security engine
 	app := ztatic.NewSecure()
 
-	// 2. Mount static asset pipeline (embed.FS for production single-binary, os.DirFS for dev)
-	distSub, err := fs.Sub(mywebsite.DistFS, "dist")
-	if err == nil {
+	// 2. Mount static asset pipeline (development live-reload vs production single-binary embed)
+	isDev := os.Getenv("APP_ENV") == "development"
+	if isDev {
+		fullstack.MountAssets(app.Echo, os.DirFS("dist"), true)
+	} else if distSub, err := fs.Sub(mywebsite.DistFS, "dist"); err == nil {
 		fullstack.MountAssets(app.Echo, distSub, false)
 	} else {
 		fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)
