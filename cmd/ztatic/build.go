@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"ztatic-go-framework/fullstack"
@@ -75,7 +76,11 @@ var buildCmd = &cobra.Command{
 
 		// Step 4: Binary Compilation
 		fmt.Printf("🚀 [4/4] Compiling static Go binary (%s)...\n", buildOutDir)
-		buildCmd := exec.Command("go", "build", "-ldflags=-s -w", "-trimpath", "-o", buildOutDir, buildEntry)
+		entry := buildEntry
+		if strings.HasSuffix(entry, ".go") {
+			entry = filepath.Dir(entry)
+		}
+		buildCmd := exec.Command("go", "build", "-ldflags=-s -w", "-trimpath", "-o", buildOutDir, entry)
 		buildCmd.Stdout = os.Stdout
 		buildCmd.Stderr = os.Stderr
 		if err := buildCmd.Run(); err != nil {
@@ -90,7 +95,7 @@ var buildCmd = &cobra.Command{
 
 func init() {
 	buildCmd.Flags().StringVarP(&buildOutDir, "out", "o", "bin/server", "Destination binary output path")
-	buildCmd.Flags().StringVarP(&buildEntry, "entry", "e", "cmd/server/main.go", "Entrypoint Go package for binary build")
+	buildCmd.Flags().StringVarP(&buildEntry, "entry", "e", "./cmd/server", "Entrypoint Go package for binary build")
 	buildCmd.Flags().StringVar(&buildAssets, "assets-dir", "assets", "Asset directory for esbuild bundling")
 	buildCmd.Flags().StringVar(&buildDist, "dist-dir", "dist", "Output directory for bundled and content-hashed static assets")
 	

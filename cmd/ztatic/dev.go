@@ -88,7 +88,7 @@ var devCmd = &cobra.Command{
 
 func init() {
 	devCmd.Flags().IntVarP(&devPort, "port", "p", 8080, "Server HTTP port")
-	devCmd.Flags().StringVarP(&devEntry, "entry", "e", "cmd/server/main.go", "Entrypoint Go file for the web application")
+	devCmd.Flags().StringVarP(&devEntry, "entry", "e", "./cmd/server", "Entrypoint Go package or file for the web application")
 	devCmd.Flags().StringVar(&devWatchDir, "watch-dir", ".", "Root directory to monitor for file changes")
 	
 	rootCmd.AddCommand(devCmd)
@@ -256,7 +256,11 @@ func (s *DevServer) restartServerProcess() {
 	fmt.Println("🚀 Compiling Go binary...")
 	os.MkdirAll("tmp", 0755)
 	
-	buildCmd := exec.Command("go", "build", "-o", "tmp/dev-server", s.EntryPath)
+	entry := s.EntryPath
+	if strings.HasSuffix(entry, ".go") {
+		entry = filepath.Dir(entry)
+	}
+	buildCmd := exec.Command("go", "build", "-o", "tmp/dev-server", entry)
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	

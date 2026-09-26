@@ -158,24 +158,23 @@ rapid.RegisterResource(app.Group("/api"), "products", productRepo)
 package main
 
 import (
-	"github.com/labstack/echo/v5"
+	"ztatic-go-framework"
 	"ztatic-go-framework/fullstack"
 	"ztatic-go-framework/realtime"
 )
 
-func SetupRealtime(e *echo.Echo) {
+func SetupRealtime(app *ztatic.Engine) {
 	broker := realtime.NewMemoryBroker()
 
 	// Mount SSE or WebSocket handlers
-	e.GET("/sse", realtime.SSEHandler(broker))
-	e.GET("/ws", realtime.WebSocketHandler(broker))
+	app.GET("/sse", realtime.SSEHandler(broker))
+	app.GET("/ws", realtime.WebSocketHandler(broker))
 
 	// Broadcast DOM updates from any handler
-	e.POST("/messages/send", func(c *echo.Context) error {
+	app.POST("/messages/send", func(c *ztatic.Context) error {
 		broker.Publish(c.Request().Context(), "chat-room", fullstack.TurboStreamItem{
-			Action:    fullstack.StreamAppend,
-			Target:    "chat-box",
-			Component: components.MessageItem("Hello from Go!"),
+			Action: fullstack.StreamRefresh,
+			Target: "chat-box",
 		})
 		return c.NoContent(200)
 	})
