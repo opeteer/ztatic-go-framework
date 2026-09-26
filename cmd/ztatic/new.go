@@ -44,6 +44,7 @@ var newCmd = &cobra.Command{
 			"assets/css",
 			"assets/js",
 			"db/migrations",
+			"dist",
 		}
 
 		// Create directories
@@ -55,11 +56,16 @@ var newCmd = &cobra.Command{
 			}
 		}
 
+		// Create placeholder in dist directory so embed.FS or tools do not fail
+		_ = os.WriteFile(filepath.Join(baseDir, "dist", ".gitkeep"), []byte(""), 0644)
+
 		// Generate main.go stub
 		mainContent := `package main
 
 import (
 	"log"
+	"os"
+
 	"ztatic-go-framework"
 )
 
@@ -70,7 +76,11 @@ func main() {
 		return c.String(200, "Welcome to Ztatic!")
 	})
 
-	log.Fatal(app.Start(":8080"))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Fatal(app.Start(":" + port))
 }
 `
 		if err := os.WriteFile(filepath.Join(baseDir, "cmd/server", "main.go"), []byte(mainContent), 0644); err != nil {
@@ -96,10 +106,18 @@ import (
 		var frameworkDir string
 		var frameworkSumData []byte
 
-		if cwd, err := os.Getwd(); err == nil {
-			if modBytes, err := os.ReadFile(filepath.Join(cwd, "go.mod")); err == nil {
-				if strings.Contains(string(modBytes), "module ztatic-go-framework") {
-					frameworkDir = cwd
+		if envDir := os.Getenv("ZTATIC_FRAMEWORK_DIR"); envDir != "" {
+			if abs, err := filepath.Abs(envDir); err == nil {
+				frameworkDir = abs
+			}
+		}
+
+		if frameworkDir == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				if modBytes, err := os.ReadFile(filepath.Join(cwd, "go.mod")); err == nil {
+					if strings.Contains(string(modBytes), "module ztatic-go-framework") {
+						frameworkDir = cwd
+					}
 				}
 			}
 		}
@@ -137,8 +155,8 @@ import (
 
 		replacePath := "../"
 		if frameworkDir != "" {
-			if rel, err := filepath.Rel(baseDir, frameworkDir); err == nil {
-				replacePath = rel
+			if rel, err := filepath.Rel(absBaseDir, frameworkDir); err == nil {
+				replacePath = filepath.ToSlash(rel)
 			}
 		}
 

@@ -82,7 +82,11 @@ func DefaultCSRFConfig() middleware.CSRFConfig {
 	return middleware.CSRFConfig{
 		Skipper: func(c *echo.Context) bool {
 			path := c.Request().URL.Path
-			return strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/docs")
+			return path == "/api" || strings.HasPrefix(path, "/api/") ||
+				path == "/docs" || strings.HasPrefix(path, "/docs/") ||
+				strings.HasPrefix(path, "/v1/") ||
+				strings.HasPrefix(path, "/v2/") ||
+				strings.HasPrefix(path, "/rest/")
 		},
 		TokenLookup:    "header:X-CSRF-Token,form:_csrf",
 		CookiePath:     "/",

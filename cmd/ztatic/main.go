@@ -1,7 +1,20 @@
-import sys
+package main
 
-def greeting(name):
-    print(f"Hey {name}")
+import (
+	"fmt"
+	"os"
 
-if __name__ == '__main__':
-    greeting(sys.argv[1])
+	"github.com/spf13/cobra"
+)
+
+var rootCmd = &cobra.Command{
+	Use:   "ztatic",
+	Short: "⚡ Ztatic CLI - Security-First Full-Stack Go Framework",
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}

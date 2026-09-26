@@ -132,7 +132,11 @@ func main() {
 		return c.String(200, "Welcome to Ztatic Framework!")
 	})
 
-	log.Fatal(app.Start(":8080"))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Fatal(app.Start(":" + port))
 }
 ```
 

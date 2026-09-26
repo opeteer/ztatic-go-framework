@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+
 	"ztatic-go-framework"
 )
 
@@ -12,5 +14,9 @@ func main() {
 		return c.String(200, "Welcome to Ztatic!")
 	})
 
-	log.Fatal(app.Start(":8080"))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Fatal(app.Start(":" + port))
 }

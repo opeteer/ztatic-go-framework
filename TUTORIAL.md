@@ -249,6 +249,11 @@ func (r *ArticleRepository) FindByAuthor(ctx context.Context, author string) ([]
 ```
 
 > [!TIP]
+> **Database Initialization & Generic Stubs**:
+> - Initialize your database pool using `sql.Open("sqlite", "app.db")` and wrap it via `dbEngine := &data.DBEngine{SQL: sqlDB, Builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)}`.
+> - `BaseRepository[T]` implements default stubs for `rapid.Resource[T]` (`FindAll`, `FindByID`, `Create`, `Update`, `Delete`) returning `HTTP 501 Not Implemented`. Developers can selectively override these methods in `ArticleRepository` with SQL queries or Squirrel AST operations.
+
+> [!TIP]
 > After setting up your database models and repository, run `go mod tidy` in your project root to download the required data tier dependencies (`squirrel` and `goose`):
 > ```bash
 > go mod tidy
@@ -335,6 +340,7 @@ templ ArticleList(articles []models.Article) {
 	<div>
 		<div class="flex justify-between items-center mb-4">
 			<h1 class="text-2xl font-bold">Latest Articles</h1>
+			@CreateArticleModal()
 		</div>
 
 		<!-- Turbo Stream SSE Listener for Real-Time Updates -->
@@ -513,6 +519,8 @@ Now tie all components together in `cmd/server/main.go`—mounting static assets
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"log"
 	"os"
 
@@ -527,12 +535,21 @@ import (
 	"mywebsite/internal/views/layouts"
 )
 
+// Embed compiled static assets directly into the binary for zero-dependency single-binary deployment
+//go:embed all:dist
+var distFS embed.FS
+
 func main() {
 	// 1. Initialize Zero-Trust security engine
 	app := ztatic.NewSecure()
 
-	// 2. Mount static asset pipeline (serves dist/ with cache-busting)
-	fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)
+	// 2. Mount static asset pipeline (embed.FS for production single-binary, os.DirFS for dev)
+	distSub, err := fs.Sub(distFS, "dist")
+	if err == nil {
+		fullstack.MountAssets(app.Echo, distSub, false)
+	} else {
+		fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)
+	}
 
 	// 3. Initialize data tier & event broker
 	broker := realtime.NewMemoryBroker()
@@ -553,8 +570,12 @@ func main() {
 	rapid.RegisterResource(app.Group("/api"), "articles", articleRepo)
 	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
 
-	log.Println("Ztatic application starting on :8080...")
-	log.Fatal(app.Start(":8080"))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Ztatic application starting on :%s...\n", port)
+	log.Fatal(app.Start(":" + port))
 }
 ```
 
@@ -601,14 +622,14 @@ ztatic build
 
 ### Deploying the Binary
 
-Deploying to production requires zero external runtime dependencies or static folder uploads:
+Deploying to production requires zero external runtime dependencies or static folder uploads because `dist/` is compiled directly into the binary via `//go:embed all:dist`:
 
 ```bash
 # Copy binary to deployment host
 scp bin/server user@your-server.com:/opt/mywebsite/
 
-# Run the single binary on server
-/opt/mywebsite/server
+# Run the single binary on server (optionally override port with PORT env)
+PORT=80 /opt/mywebsite/server
 ```
 
 ---
