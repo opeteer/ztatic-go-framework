@@ -144,26 +144,62 @@ func (m *mockResource) Delete(c *echo.Context, id string) error {
 func TestRegisterResource(t *testing.T) {
 	e := echo.New()
 	e.Validator = NewStructValidator()
-	g := e.Group("/api")
 
-	RegisterResource[DummyUser](g, "/users", &mockResource{})
+	// 1. Test unslashed path "users" on "/api" (as documented in README and TUTORIAL)
+	gAPI := e.Group("/api")
+	RegisterResource[DummyUser](gAPI, "users", &mockResource{})
 
-	// Test GET /api/users
+	// 2. Test slashed path "/items" on "/v1"
+	gV1 := e.Group("/v1")
+	RegisterResource[DummyUser](gV1, "/items", &mockResource{})
+
+	// 3. Test unslashed path "products" on group "/v2"
+	gV2 := e.Group("/v2")
+	RegisterResource[DummyUser](gV2, "products", &mockResource{})
+
+	// Test GET /api/users (unslashed mounting)
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
-
 	if rec.Code != http.StatusOK {
-		t.Errorf("expected HTTP 200 for FindAll resource, got %d", rec.Code)
+		t.Errorf("expected HTTP 200 for FindAll resource on /api/users, got %d", rec.Code)
 	}
 
 	// Test DELETE /api/users/1
 	reqDel := httptest.NewRequest(http.MethodDelete, "/api/users/1", nil)
 	recDel := httptest.NewRecorder()
 	e.ServeHTTP(recDel, reqDel)
-
 	if recDel.Code != http.StatusNoContent {
-		t.Errorf("expected HTTP 204 for Delete resource, got %d", recDel.Code)
+		t.Errorf("expected HTTP 204 for Delete resource on /api/users/1, got %d", recDel.Code)
+	}
+
+	// Test GET /v1/items
+	reqItems := httptest.NewRequest(http.MethodGet, "/v1/items", nil)
+	recItems := httptest.NewRecorder()
+	e.ServeHTTP(recItems, reqItems)
+	if recItems.Code != http.StatusOK {
+		t.Errorf("expected HTTP 200 for FindAll resource on /v1/items, got %d", recItems.Code)
+	}
+
+	// Test GET /v2/products
+	reqProducts := httptest.NewRequest(http.MethodGet, "/v2/products", nil)
+	recProducts := httptest.NewRecorder()
+	e.ServeHTTP(recProducts, reqProducts)
+	if recProducts.Code != http.StatusOK {
+		t.Errorf("expected HTTP 200 for FindAll resource on /v2/products, got %d", recProducts.Code)
+	}
+
+	// Verify OpenAPI schema paths
+	spec := DefaultOpenAPIGenerator.BuildOpenAPI(e)
+	paths, ok := spec["paths"].(map[string]any)
+	if !ok {
+		t.Fatalf("paths object missing in OpenAPI schema")
+	}
+
+	for _, expectedPath := range []string{"/api/users", "/api/users/{id}", "/v1/items", "/v2/products"} {
+		if _, found := paths[expectedPath]; !found {
+			t.Errorf("expected OpenAPI spec to contain path %q, but was not found", expectedPath)
+		}
 	}
 }
 

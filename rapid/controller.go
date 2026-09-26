@@ -3,6 +3,7 @@ package rapid
 import (
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/labstack/echo/v5"
 )
@@ -21,10 +22,11 @@ type Resource[T any] interface {
 // generic Resource interface. It automatically integrates Ztatic's `BindAndValidate`.
 func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 	var group *echo.Group
-	if path == "" || path == "/" {
+	cleanPath := strings.Trim(path, "/")
+	if cleanPath == "" {
 		group = g
 	} else {
-		group = g.Group(path)
+		group = g.Group("/" + cleanPath)
 	}
 	
 	// Introspect type T for OpenAPI docs
