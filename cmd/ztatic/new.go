@@ -65,8 +65,21 @@ func main() {
 			fmt.Printf("Error writing main.go: %v\n", err)
 		}
 
+		// Generate tools.go to pre-wire and lock generator runtime dependencies (Templ)
+		toolsContent := `//go:build tools
+
+package main
+
+import (
+	_ "github.com/a-h/templ"
+)
+`
+		if err := os.WriteFile(filepath.Join(baseDir, "tools.go"), []byte(toolsContent), 0644); err != nil {
+			fmt.Printf("Error writing tools.go: %v\n", err)
+		}
+
 		// Generate go.mod
-		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire ztatic-go-framework v0.0.0\n\nreplace ztatic-go-framework => ../\n", projectName)
+		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire (\n\tgithub.com/a-h/templ v0.3.1020\n\tztatic-go-framework v0.0.0\n)\n\nreplace ztatic-go-framework => ../\n", projectName)
 		if err := os.WriteFile(filepath.Join(baseDir, "go.mod"), []byte(modContent), 0644); err != nil {
 			fmt.Printf("Error writing go.mod: %v\n", err)
 		}

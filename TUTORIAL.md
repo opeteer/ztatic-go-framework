@@ -258,7 +258,7 @@ func (r *ArticleRepository) FindByAuthor(ctx context.Context, author string) ([]
 Ztatic uses **Templ** for type-safe, compiled HTML templates in Go.
 
 > [!TIP]
-> Ensure the Templ runtime library is installed in your project dependencies:
+> Newly scaffolded Ztatic projects are pre-wired with the Templ runtime dependency via `tools.go`. If configuring an existing module manually, add the dependency with:
 > ```bash
 > go get github.com/a-h/templ
 > ```
