@@ -281,7 +281,7 @@ templ AppLayout(content templ.Component) {
 		<title>My Ztatic Website</title>
 		
 		<!-- Loaded from native esbuild pipeline -->
-		<link rel="stylesheet" href={ fullstack.AssetURL("/assets/css/app.css") }/>
+		<link rel="stylesheet" href={ fullstack.AssetURL("app.css") }/>
 		<script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.0-beta.2/dist/turbo.es2017-umd.js"></script>
 		<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 	</head>
@@ -486,6 +486,59 @@ templ CreateArticleModal() {
 			</div>
 		</div>
 	</div>
+}
+```
+
+### 3. Assembling the Application Server (`cmd/server/main.go`)
+
+Now tie all components together in `cmd/server/main.go`—mounting static assets, OpenAPI documentation, generic database repositories, and real-time event brokers:
+
+```go
+package main
+
+import (
+	"log"
+	"os"
+
+	"ztatic-go-framework"
+	"ztatic-go-framework/fullstack"
+	"ztatic-go-framework/rapid"
+	"ztatic-go-framework/realtime"
+	"mywebsite/internal/controllers"
+	"mywebsite/internal/models"
+	"mywebsite/internal/repositories"
+	"mywebsite/internal/views/components"
+	"mywebsite/internal/views/layouts"
+)
+
+func main() {
+	// 1. Initialize Zero-Trust security engine
+	app := ztatic.NewSecure()
+
+	// 2. Mount static asset pipeline (serves dist/ with cache-busting)
+	fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)
+
+	// 3. Initialize data tier & event broker
+	broker := realtime.NewMemoryBroker()
+	articleRepo := repositories.NewArticleRepository(nil)
+	articleController := &controllers.ArticleController{Broker: broker}
+
+	// 4. Register application routes
+	app.GET("/", func(c *ztatic.Context) error {
+		sampleArticles := []models.Article{
+			{ID: 1, Title: "First Article", Content: "Hello from Ztatic!", Author: "Alice"},
+		}
+		return fullstack.Render(c, 200, layouts.AppLayout(components.ArticleList(sampleArticles)))
+	})
+	app.GET("/sse", realtime.SSEHandler(broker))
+	app.POST("/articles", articleController.Create)
+
+	// 5. Mount REST CRUD & OpenAPI Scalar docs
+	rapid.RegisterResource(app.Group("/api"), "articles", articleRepo)
+	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
+
+	log.Println("Ztatic application starting on :8080...")
+	log.Fatal(app.Start(":8080"))
 }
 ```
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -76,17 +77,30 @@ func (am *AssetManager) Mount(e *echo.Echo) {
 // In Development: Appends a startup timestamp to bust cache (`/static/css/app.css?v=1695500000`)
 // In Production: Looks up the content-hashed filename from manifest (`/static/css/app.a8f9b2.css`)
 func (am *AssetManager) GetURL(assetPath string) string {
+	cleanPath := strings.TrimPrefix(assetPath, "/")
 	if am.isDev {
-		return fmt.Sprintf("%s/%s?v=%d", am.urlPrefix, assetPath, am.startupTime)
+		return fmt.Sprintf("%s/%s?v=%d", am.urlPrefix, cleanPath, am.startupTime)
 	}
 
-	// Look up hashed name in manifest
-	if hashedName, ok := am.manifest[assetPath]; ok {
+	// 1. Direct match with clean path (e.g. "css/app.css" or "app.css")
+	if hashedName, ok := am.manifest[cleanPath]; ok {
 		return fmt.Sprintf("%s/%s", am.urlPrefix, hashedName)
 	}
 
-	// Fallback to original name if manifest fails
-	return fmt.Sprintf("%s/%s", am.urlPrefix, assetPath)
+	// 2. Match with source "assets/" prefix stripped (e.g. "assets/css/app.css" -> "css/app.css")
+	trimmedAssets := strings.TrimPrefix(cleanPath, "assets/")
+	if hashedName, ok := am.manifest[trimmedAssets]; ok {
+		return fmt.Sprintf("%s/%s", am.urlPrefix, hashedName)
+	}
+
+	// 3. Basename match (e.g. "assets/css/app.css" -> "app.css")
+	base := filepath.Base(cleanPath)
+	if hashedName, ok := am.manifest[base]; ok {
+		return fmt.Sprintf("%s/%s", am.urlPrefix, hashedName)
+	}
+
+	// Fallback to original clean name if manifest fails
+	return fmt.Sprintf("%s/%s", am.urlPrefix, cleanPath)
 }
 
 // AssetURL is a global helper function designed to be called directly from 
