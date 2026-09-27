@@ -12,7 +12,9 @@ import (
 
 // ResponseEnvelope represents the standard REST API envelope structure.
 type ResponseEnvelope struct {
-	Error *ErrorBody `json:"error"`
+	Success bool           `json:"success"`
+	Error   *ErrorBody     `json:"error"`
+	Meta    map[string]any `json:"meta,omitempty"`
 }
 
 // ErrorBody contains the serialized representation of an Error in an envelope.
@@ -94,7 +96,15 @@ func buildEnvelope(c *echo.Context, appErr *Error, cfg Config) ResponseEnvelope 
 		}
 	}
 
+	meta := map[string]any{
+		"timestamp": timestamp,
+	}
+	if appErr.RequestID != "" {
+		meta["request_id"] = appErr.RequestID
+	}
+
 	return ResponseEnvelope{
+		Success: false,
 		Error: &ErrorBody{
 			Code:      appErr.Code,
 			Message:   msg,
@@ -106,6 +116,7 @@ func buildEnvelope(c *echo.Context, appErr *Error, cfg Config) ResponseEnvelope 
 			Stack:     stackStr,
 			Timestamp: timestamp,
 		},
+		Meta: meta,
 	}
 }
 

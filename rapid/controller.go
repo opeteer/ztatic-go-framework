@@ -1,11 +1,11 @@
 package rapid
 
 import (
-	"net/http"
 	"reflect"
 	"strings"
 
 	"github.com/labstack/echo/v5"
+	"ztatic-go-framework/response"
 )
 
 // Resource defines a standard generic RESTful interface for any data model.
@@ -15,6 +15,12 @@ type Resource[T any] interface {
 	Create(c *echo.Context, item *T) (T, error)
 	Update(c *echo.Context, id string, item *T) (T, error)
 	Delete(c *echo.Context, id string) error
+}
+
+// PaginatedResource defines an extended generic RESTful interface with pagination support.
+type PaginatedResource[T any] interface {
+	Resource[T]
+	FindAllPaginated(c *echo.Context, p response.PageParams) ([]T, int64, error)
 }
 
 // RegisterResource is a rapid DX scaffolder. It automatically mounts standard 
@@ -40,13 +46,22 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		typeName = itemType.Name()
 	}
 
-	// GET /resource - FindAll
+	// GET /resource - FindAll (supports PaginatedResource if implemented)
 	rFindAll := group.GET("", func(c *echo.Context) error {
+		if paginatedRes, ok := res.(PaginatedResource[T]); ok {
+			p := response.ExtractPagination(c)
+			items, total, err := paginatedRes.FindAllPaginated(c, p)
+			if err != nil {
+				return err
+			}
+			meta := p.WithTotal(total)
+			return response.Paginated(c, items, meta)
+		}
 		items, err := res.FindAll(c)
 		if err != nil {
 			return err
 		}
-		return c.JSON(http.StatusOK, items)
+		return response.OK(c, items)
 	})
 	DefaultOpenAPIGenerator.RegisterRouteMeta(rFindAll.Method, rFindAll.Path, RouteMetadata{
 		Summary:      "Find all " + typeName + "s",
@@ -61,7 +76,7 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		if err != nil {
 			return err
 		}
-		return c.JSON(http.StatusOK, item)
+		return response.OK(c, item)
 	})
 	DefaultOpenAPIGenerator.RegisterRouteMeta(rFindByID.Method, rFindByID.Path, RouteMetadata{
 		Summary:      "Find " + typeName + " by ID",
@@ -81,7 +96,7 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		if err != nil {
 			return err
 		}
-		return c.JSON(http.StatusCreated, created)
+		return response.Created(c, created)
 	})
 	DefaultOpenAPIGenerator.RegisterRouteMeta(rCreate.Method, rCreate.Path, RouteMetadata{
 		Summary:      "Create " + typeName,
@@ -103,7 +118,7 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		if err != nil {
 			return err
 		}
-		return c.JSON(http.StatusOK, updated)
+		return response.OK(c, updated)
 	})
 	DefaultOpenAPIGenerator.RegisterRouteMeta(rUpdate.Method, rUpdate.Path, RouteMetadata{
 		Summary:      "Update " + typeName,
@@ -118,7 +133,7 @@ func RegisterResource[T any](g *echo.Group, path string, res Resource[T]) {
 		if err := res.Delete(c, id); err != nil {
 			return err
 		}
-		return c.NoContent(http.StatusNoContent)
+		return response.NoContent(c)
 	})
 	DefaultOpenAPIGenerator.RegisterRouteMeta(rDelete.Method, rDelete.Path, RouteMetadata{
 		Summary: "Delete " + typeName,

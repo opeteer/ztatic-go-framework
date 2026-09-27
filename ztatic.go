@@ -11,6 +11,7 @@ import (
 	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
+	"ztatic-go-framework/response"
 	"ztatic-go-framework/security/audit"
 	"ztatic-go-framework/security/crypto"
 	"ztatic-go-framework/security/session"
@@ -170,6 +171,54 @@ func ErrValidation(message string, violations ...errors.FieldViolation) *errors.
 func ErrInternal(message string) *errors.Error { return errors.Internal(message) }
 func ErrRateLimited(message string) *errors.Error { return errors.RateLimited(message) }
 
+// Response & Pagination DX Aliases
+type Envelope[T any] = response.Envelope[T]
+type ResponseMeta = response.ResponseMeta
+type PageParams = response.PageParams
+type PaginationMeta = response.PaginationMeta
+type CursorParams = response.CursorParams
+type CursorMeta = response.CursorMeta
+type Links = response.Links
+type ResponseConfig = response.Config
+type ResponseOption = response.Option
+
+// Response Helper Functions for Rapid DX
+func OK(c *Context, data any, opts ...response.Option) error {
+	return response.OK(c, data, opts...)
+}
+
+func Created(c *Context, data any, location ...string) error {
+	return response.Created(c, data, location...)
+}
+
+func Accepted(c *Context, data any, opts ...response.Option) error {
+	return response.Accepted(c, data, opts...)
+}
+
+func NoContent(c *Context) error {
+	return response.NoContent(c)
+}
+
+func Paginated[T any](c *Context, items []T, meta *response.PaginationMeta, opts ...response.Option) error {
+	return response.Paginated(c, items, meta, opts...)
+}
+
+func CursorPaginated[T any](c *Context, items []T, meta *response.CursorMeta, opts ...response.Option) error {
+	return response.CursorPaginated(c, items, meta, opts...)
+}
+
+func ResponseError(c *Context, err error) error {
+	return response.Error(c, err)
+}
+
+func ExtractPagination(c *Context, opts ...response.PaginationOption) response.PageParams {
+	return response.ExtractPagination(c, opts...)
+}
+
+func ExtractCursor(c *Context, opts ...response.CursorOption) response.CursorParams {
+	return response.ExtractCursor(c, opts...)
+}
+
 // AuditFromContext retrieves the active audit entry from the request context.
 func AuditFromContext(c *Context) *audit.Entry {
 	return audit.FromContext(c)
@@ -266,6 +315,7 @@ func NewWithConfig(cfg Config) *Engine {
 
 	// Core robust middleware
 	e.Use(middleware.Recover())
+	e.Use(response.MiddlewareWithConfig(cfg.Response))
 
 	// Phase 1: Structured Request Logger with context correlation and privacy scrubbing
 	if cfg.Log.EnableRequestLogger {
@@ -350,5 +400,6 @@ func New() *Engine {
 	e := echo.New()
 	e.HTTPErrorHandler = errors.NewHTTPErrorHandler(errors.DefaultConfig())
 	e.Use(middleware.Recover())
+	e.Use(response.Middleware())
 	return &Engine{Echo: e}
 }

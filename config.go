@@ -3,6 +3,7 @@ package ztatic
 import (
 	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
+	"ztatic-go-framework/response"
 	"ztatic-go-framework/security/session"
 	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
@@ -19,6 +20,9 @@ type Config struct {
 	// Error contains the standardized error handling configuration.
 	Error errors.Config
 
+	// Response contains response envelope and pagination configuration.
+	Response response.Config
+
 	// Session contains optional default session configuration.
 	Session *session.SessionConfig
 
@@ -32,5 +36,6 @@ func DefaultConfig() Config {
 		Security: web.DefaultConfig(),
 		Log:      log.DefaultConfig(),
 		Error:    errors.DefaultConfig(),
+		Response: response.DefaultConfig(),
 	}
 }

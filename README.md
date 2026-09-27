@@ -83,6 +83,17 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **Live Reload Engine:** `ztatic dev` monitors `.go`, `.templ`, `.css`, and `.js` files using `fsnotify` with a 100ms debouncer.
 * **Single-Binary Compiler:** `ztatic build` executes a 4-step pipeline (`templ generate`, `esbuild`, manifest generation, `go build`) to create an optimized production binary.
 
+### 11. Request/Response Envelope Standardization (`response`)
+* **Canonical Type-Safe Envelope:** Generic `Envelope[T any]` encapsulates `success`, `data`, `error`, `pagination`, `meta`, and `links` with zero type assertion overhead.
+* **Empty Slice Normalization:** Guarantees empty Go slices serialize as `[]` rather than JSON `null` for consistent collection semantics.
+* **Dual-Model Pagination:**
+  * **Offset / Page-Based Pagination:** Validates `page`, `per_page`, `sort`, `order` with strict bounds checking (default 20, max 100), automated SQL offset/limit math (`p.Offset()`, `p.Limit()`, `p.Apply(squirrel.SelectBuilder)`), and computed total pages and navigation flags.
+  * **Cursor / Keyset-Based Pagination:** Provides opaque URL-safe Base64 token generation and decoding (`EncodeCursor`, `DecodeCursor[T]`) for high-throughput infinite feeds and audit log streaming.
+* **HATEOAS Navigation & RFC 5988 Header:** Automatically generates navigation links (`self`, `first`, `prev`, `next`, `last`) preserving all custom query parameters, and injects standard RFC 5988 `Link` HTTP headers.
+* **Error Unification & Zero-Trust Safety:** Harmonizes domain errors (`errors.Error`) with the unified envelope contract (`success: false`, `error: {...}`, `meta: {...}`), strictly scrubbing 5xx internals in production while preserving request IDs.
+* **Rapid Resource Integration:** `rapid.RegisterResource` natively supports `PaginatedResource[T]` and standard response envelopes (`response.OK`, `response.Created`, `response.Paginated`, `response.NoContent`).
+* **Ergonomic DX Helpers:** 1-import top-level helpers: `ztatic.OK(c, data)`, `ztatic.Created(c, data, loc)`, `ztatic.Paginated(c, items, meta)`, `ztatic.NoContent(c)`, `ztatic.ResponseError(c, err)`, and `response.Raw(c, status, data)` escape hatch.
+
 ---
 
 ## Quick Start
@@ -414,6 +425,86 @@ func SetupSessions(app *ztatic.Engine) {
 			"flashes": flashes,
 		})
 	})
+}
+```
+
+### 7. Request/Response Envelope Standardization & Pagination (`response`)
+
+Ztatic provides ergonomic helpers for returning standard API envelopes, paginated collections, and HATEOAS navigation links:
+
+```go
+package main
+
+import (
+	"ztatic-go-framework"
+	"ztatic-go-framework/response"
+)
+
+type Product struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Price float64 `json:"price"`
+}
+
+func RegisterProductRoutes(app *ztatic.Engine) {
+	// 1. Single Item Envelopes: OK (200), Created (201), NoContent (204)
+	app.GET("/api/products/:id", func(c *ztatic.Context) error {
+		product := Product{ID: 1, Name: "Mechanical Keyboard", Price: 129.99}
+		return ztatic.OK(c, product, response.WithMeta("cached", true))
+	})
+
+	app.POST("/api/products", func(c *ztatic.Context) error {
+		created := Product{ID: 2, Name: "Wireless Mouse", Price: 79.99}
+		return ztatic.Created(c, created, "/api/products/2")
+	})
+
+	// 2. Offset / Page-Based Pagination with HATEOAS Navigation Links
+	app.GET("/api/products", func(c *ztatic.Context) error {
+		// Extracts and validates ?page=1&per_page=20&sort=price&order=desc
+		p := ztatic.ExtractPagination(c)
+
+		// Directly apply pagination to SQL query builders
+		// builder := p.Apply(squirrel.Select("*").From("products"))
+		products, totalCount := fetchProducts(p.Limit(), p.Offset())
+
+		// Calculates TotalPages, HasNext, HasPrev, and builds RFC 5988 Link headers
+		meta := p.WithTotal(totalCount)
+		return ztatic.Paginated(c, products, meta)
+	})
+
+	// 3. Raw JSON Escape Hatch (for third-party webhooks)
+	app.GET("/api/webhook-health", func(c *ztatic.Context) error {
+		return response.Raw(c, 200, map[string]string{"status": "UP"})
+	})
+}
+```
+
+Standardized Paginated Output (HTTP 200):
+```json
+{
+  "success": true,
+  "data": [
+    { "id": 1, "name": "Mechanical Keyboard", "price": 129.99 }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total_items": 45,
+    "total_pages": 3,
+    "has_next": true,
+    "has_prev": false
+  },
+  "links": {
+    "self": "/api/products?page=1&per_page=20",
+    "first": "/api/products?page=1&per_page=20",
+    "next": "/api/products?page=2&per_page=20",
+    "last": "/api/products?page=3&per_page=20"
+  },
+  "meta": {
+    "request_id": "req-18d91807c92fdff4-435a2085-0007",
+    "timestamp": "2026-09-27T12:00:00Z",
+    "duration": "1.25ms"
+  }
 }
 ```
 
