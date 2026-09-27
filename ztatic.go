@@ -1,9 +1,11 @@
 package ztatic
 
 import (
+	"context"
 	"log/slog"
 	"os"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/redis/go-redis/v9"
@@ -17,6 +19,7 @@ import (
 	"ztatic-go-framework/security/session"
 	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
+	"ztatic-go-framework/validation"
 )
 
 // Engine represents the Ztatic Framework engine, wrapping Echo v5
@@ -170,6 +173,56 @@ func ErrValidation(message string, violations ...errors.FieldViolation) *errors.
 }
 func ErrInternal(message string) *errors.Error { return errors.Internal(message) }
 func ErrRateLimited(message string) *errors.Error { return errors.RateLimited(message) }
+
+// Validation & Sanitization DX Aliases
+type Validator = validation.Engine
+type ContextValidator = validation.ContextValidator
+type Sanitizable = validation.Sanitizable
+type ContextSanitizable = validation.ContextSanitizable
+type CustomValidator = validation.CustomValidator
+type SelfValidator = validation.SelfValidator
+type DatabaseResolver = validation.DatabaseResolver
+
+// Validation & Sanitization Helper Functions
+func Sanitize(i any) error {
+	return validation.Sanitize(i)
+}
+
+func SanitizeCtx(ctx context.Context, i any) error {
+	return validation.SanitizeCtx(ctx, i)
+}
+
+func Validate(i any) error {
+	return validation.Validate(i)
+}
+
+func ValidateCtx(ctx context.Context, i any) error {
+	return validation.ValidateCtx(ctx, i)
+}
+
+func RegisterValidationRule(tag string, fn validator.Func) {
+	validation.RegisterRule(tag, fn)
+}
+
+func RegisterValidationRuleWithContext(tag string, fn validator.FuncCtx) {
+	validation.RegisterRuleWithContext(tag, fn)
+}
+
+func RegisterValidationMessage(rule, template string) {
+	validation.RegisterRuleMessage(rule, template)
+}
+
+func RegisterValidationFieldMessage(field, rule, template string) {
+	validation.RegisterFieldMessage(field, rule, template)
+}
+
+func SetDatabaseResolver(resolver validation.DatabaseResolver) {
+	validation.SetDatabaseResolver(resolver)
+}
+
+func BindAndValidate(c *Context, i any) error {
+	return rapid.BindAndValidate(c, i)
+}
 
 // Response & Pagination DX Aliases
 type Envelope[T any] = response.Envelope[T]
@@ -401,5 +454,6 @@ func New() *Engine {
 	e.HTTPErrorHandler = errors.NewHTTPErrorHandler(errors.DefaultConfig())
 	e.Use(middleware.Recover())
 	e.Use(response.Middleware())
+	e.Validator = rapid.NewStructValidator()
 	return &Engine{Echo: e}
 }

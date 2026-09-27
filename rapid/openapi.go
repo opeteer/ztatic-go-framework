@@ -333,6 +333,27 @@ func buildSchemaFromType(t reflect.Type, visited map[reflect.Type]string) (schem
 			if strings.Contains(valTag, "email") {
 				fieldRef["format"] = "email"
 			}
+			if strings.Contains(valTag, "uuid") {
+				fieldRef["format"] = "uuid"
+			}
+			if strings.Contains(valTag, "url") {
+				fieldRef["format"] = "uri"
+			}
+			if strings.Contains(valTag, "phone") {
+				fieldRef["format"] = "tel"
+			}
+			if strings.Contains(valTag, "strong_password") {
+				fieldRef["format"] = "password"
+			}
+			if strings.Contains(valTag, "credit_card") {
+				fieldRef["format"] = "credit-card"
+			}
+			if strings.Contains(valTag, "json") {
+				fieldRef["contentMediaType"] = "application/json"
+			}
+			if strings.Contains(valTag, "slug") {
+				fieldRef["pattern"] = "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+			}
 			
 			parts := strings.Split(valTag, ",")
 			for _, p := range parts {
