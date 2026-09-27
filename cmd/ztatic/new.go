@@ -77,11 +77,11 @@ var DistFS embed.FS
 
 import (
 	"io/fs"
-	"log"
 	"os"
 
 	"ztatic-go-framework"
 	"ztatic-go-framework/fullstack"
+	"ztatic-go-framework/log"
 	"%s"
 )
 
@@ -106,8 +106,10 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Ztatic application starting on :%%s...\n", port)
-	log.Fatal(app.Start(":" + port))
+	log.Info("Ztatic application starting", "port", port)
+	if err := app.Start(":" + port); err != nil {
+		log.Error("server stopped", "error", err)
+	}
 }
 `, moduleName, moduleName)
 		if err := os.WriteFile(filepath.Join(baseDir, "cmd/server", "main.go"), []byte(mainContent), 0644); err != nil {

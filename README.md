@@ -63,7 +63,15 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **Flexible Sinks & Schedulers:** Choose between deterministic `SyncLogger` (fail-closed mode for strict financial systems) or high-throughput `AsyncLogger` with non-blocking channel queues, worker pools, and overflow drop/block/fallback policies. Supports `WriterSink` (stdout/stderr), `FileSink` (append-only with fsync), `MemorySink` (testing & admin queries), `MultiSink` (fan-out broadcast), and `WebhookSink`.
 * **Zero-Config Middleware & Deep Sanitization:** Automatically audits all state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) and error responses (`status >= 400`), while automatically redacting sensitive credentials and PII (passwords, tokens, keys) in metadata and diffs.
 
-### 8. Developer CLI (`ztatic`)
+### 8. Structured Operational Logging Engine (`log`)
+* **Standard-Aligned Architecture:** Built natively on Go standard library `log/slog` with seamless Echo v5 integration.
+* **Dual-Mode Formatting:** Emits human-friendly colorized terminal logs with aligned badges in development (`APP_ENV=development`), and high-performance NDJSON in production for automated SIEM / log aggregator ingestion (Datadog, Loki, Splunk).
+* **Automatic Request Logging:** Pre-wired into `NewSecure()` to record request latency, route pattern, client IP, HTTP status, and payload sizes with intelligent status-to-level mapping (2xx/3xx -> INFO, 4xx -> WARN, 5xx -> ERROR).
+* **Context & Request Correlation:** Automatically generates or propagates `X-Request-ID` across HTTP response headers and context loggers, ensuring every log emitted inside a handler correlates to the request.
+* **Dynamic Level Switching:** Dynamically adjust log severity at runtime via `app.SetLogLevel(...)` and `slog.LevelVar` without restarting the server.
+* **Zero-Trust Privacy Scrubbing:** Seamlessly integrates with `security/privacy.LogMasker` to scrub passwords, tokens, API keys, and sensitive data from all emitted log records.
+
+### 9. Developer CLI (`ztatic`)
 * **Cobra CLI Suite:** Built on `spf13/cobra` for scaffolding, running, and building applications.
 * **Live Reload Engine:** `ztatic dev` monitors `.go`, `.templ`, `.css`, and `.js` files using `fsnotify` with a 100ms debouncer.
 * **Single-Binary Compiler:** `ztatic build` executes a 4-step pipeline (`templ generate`, `esbuild`, manifest generation, `go build`) to create an optimized production binary.
@@ -232,6 +240,36 @@ func RegisterInvoiceRoutes(app *ztatic.Engine) {
 		}
 
 		return c.JSON(200, ztatic.Map{"status": "paid"})
+	})
+}
+```
+
+### 4. Structured Operational Logging & Context Correlation (`log`)
+
+Structured logging is pre-configured and active in `NewSecure()`. Requests automatically receive an `X-Request-ID` and record latency and status codes. Inside handlers, retrieve the enriched request logger to correlate application logs:
+
+```go
+package main
+
+import (
+	"ztatic-go-framework"
+	"ztatic-go-framework/log"
+)
+
+func RegisterUserRoutes(app *ztatic.Engine) {
+	// Dynamically adjust log level at runtime without restarting
+	app.SetLogLevel(log.LevelDebug)
+
+	app.GET("/api/users/:id", func(c *ztatic.Context) error {
+		// LogFromContext(c) provides a logger pre-populated with req_id, method, path, and client IP
+		logger := ztatic.LogFromContext(c)
+		logger.Debug("fetching user record", "user_id", c.Param("id"))
+
+		// Sensitive attributes like passwords or tokens are automatically scrubbed:
+		// Output: password=[REDACTED]
+		logger.Info("user authenticated", "user_id", c.Param("id"), "password", "my-secret-pass")
+
+		return c.JSON(200, ztatic.Map{"id": c.Param("id"), "status": "active"})
 	})
 }
 ```

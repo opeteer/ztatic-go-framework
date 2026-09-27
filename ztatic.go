@@ -1,11 +1,13 @@
 package ztatic
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
-	
+
+	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
 	"ztatic-go-framework/security/audit"
 	"ztatic-go-framework/security/crypto"
@@ -18,6 +20,7 @@ type Engine struct {
 	*echo.Echo
 	wafCfg      *web.WAFConfig // pointer allows SetMaxBodySize to adjust WAF limit after construction
 	auditLogger audit.Logger
+	logLevelVar *slog.LevelVar
 }
 
 // AuditLogger returns the active audit logger instance, or nil if disabled.
@@ -34,6 +37,21 @@ func (eng *Engine) SetAuditLogger(l audit.Logger) {
 func (eng *Engine) UseAudit(cfg audit.AuditConfig) {
 	eng.auditLogger = cfg.Logger
 	eng.Use(audit.AuditWithConfig(cfg))
+}
+
+// SetLogLevel dynamically changes the engine's structured log severity at runtime.
+func (eng *Engine) SetLogLevel(lvl slog.Level) {
+	if eng.logLevelVar != nil {
+		eng.logLevelVar.Set(lvl)
+	}
+}
+
+// LogLevel returns the engine's active structured log severity level.
+func (eng *Engine) LogLevel() slog.Level {
+	if eng.logLevelVar != nil {
+		return eng.logLevelVar.Level()
+	}
+	return slog.LevelInfo
 }
 
 // SetCipherSuite configures the AES-256-GCM cipher suite on the engine and sets it as default for field encryption.
@@ -75,6 +93,10 @@ type AuditEntry = audit.Entry
 type AuditLogger = audit.Logger
 type AuditConfig = audit.AuditConfig
 
+type Logger = *slog.Logger
+type LogLevel = slog.Level
+type LogConfig = log.Config
+
 // AuditFromContext retrieves the active audit entry from the request context.
 func AuditFromContext(c *Context) *audit.Entry {
 	return audit.FromContext(c)
@@ -83,6 +105,15 @@ func AuditFromContext(c *Context) *audit.Entry {
 // AuditRecord records a domain audit event on the active request context.
 func AuditRecord(c *Context, action string, targetType, targetID string) *audit.Entry {
 	return audit.Record(c, action, targetType, targetID)
+}
+
+// LogFromContext retrieves the request-scoped structured logger from Echo context,
+// or returns the framework default logger.
+func LogFromContext(c *Context) *slog.Logger {
+	if c != nil {
+		return c.Logger()
+	}
+	return log.Default()
 }
 
 // NewSecure initializes a new Ztatic Engine pre-wired with the complete
@@ -94,25 +125,43 @@ func NewSecure() *Engine {
 // NewWithConfig initializes a new Ztatic Engine with the provided configuration.
 func NewWithConfig(cfg Config) *Engine {
 	e := echo.New()
-	
+
+	// Initialize structured logger
+	if cfg.Log.LevelVar == nil {
+		lvlVar := new(slog.LevelVar)
+		lvlVar.Set(cfg.Log.Level)
+		cfg.Log.LevelVar = lvlVar
+	}
+	logInstance := log.New(cfg.Log)
+	e.Logger = logInstance
+	log.SetDefault(logInstance)
+
 	// Core robust middleware
 	e.Use(middleware.Recover())
-	
+
+	// Phase 1: Structured Request Logger with context correlation and privacy scrubbing
+	if cfg.Log.EnableRequestLogger {
+		e.Use(log.RequestLoggerWithConfig(log.RequestLoggerConfig{
+			Logger:  logInstance,
+			Skipper: cfg.Log.Skipper,
+		}))
+	}
+
 	// Phase 2: Web Security Hardening Pipeline
 	if cfg.Security.EnableHeaders {
 		e.Use(web.SecureHeadersWithConfig(cfg.Security.Headers))
 	}
-	
+
 	// WAFConfig is stored by pointer so SetMaxBodySize can adjust it at runtime.
 	wafCfgCopy := cfg.Security.WAF
 	if cfg.Security.EnableWAF {
 		e.Use(web.WAFWithConfigPtr(&wafCfgCopy))
 	}
-	
+
 	if cfg.Security.EnableCSRF {
 		e.Use(web.HardenedCSRFWithConfig(cfg.Security.CSRF))
 	}
-	
+
 	if cfg.Security.EnableRateLimiter {
 		e.Use(web.AdaptiveRateLimiterWithConfig(cfg.Security.RateLimiter))
 	}
@@ -126,11 +175,16 @@ func NewWithConfig(cfg Config) *Engine {
 		auditLogger = auditCfg.Logger
 		e.Use(audit.AuditWithConfig(auditCfg))
 	}
-	
+
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
-	
-	eng := &Engine{Echo: e, wafCfg: &wafCfgCopy, auditLogger: auditLogger}
+
+	eng := &Engine{
+		Echo:        e,
+		wafCfg:      &wafCfgCopy,
+		auditLogger: auditLogger,
+		logLevelVar: cfg.Log.LevelVar,
+	}
 
 	// Auto-configure AES-256 field encryption cipher suite if environment variable is present
 	if keyStr := os.Getenv("ZTATIC_CIPHER_KEY"); keyStr != "" {

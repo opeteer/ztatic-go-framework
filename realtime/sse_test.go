@@ -47,14 +47,6 @@ func TestSSEHandler_StreamDelivery(t *testing.T) {
 	// Wait briefly for connection setup
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify SSE headers
-	if rec.Header().Get("Content-Type") != "text/event-stream" {
-		t.Errorf("expected Content-Type text/event-stream, got %q", rec.Header().Get("Content-Type"))
-	}
-	if rec.Header().Get("Cache-Control") != "no-cache" {
-		t.Errorf("expected Cache-Control no-cache")
-	}
-
 	// Publish message to topic
 	item := fullstack.TurboStreamItem{
 		Action: fullstack.StreamAppend,
@@ -70,6 +62,14 @@ func TestSSEHandler_StreamDelivery(t *testing.T) {
 	// Cancel context to end stream loop
 	cancel()
 	<-done
+
+	// Verify SSE headers
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type text/event-stream, got %q", rec.Header().Get("Content-Type"))
+	}
+	if rec.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("expected Cache-Control no-cache")
+	}
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "event: message") || !strings.Contains(body, "turbo-stream action=\"append\" target=\"chat\"") {

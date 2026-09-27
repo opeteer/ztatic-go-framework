@@ -1,10 +1,14 @@
 package ztatic
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/labstack/echo/v5"
+	"ztatic-go-framework/log"
 	"ztatic-go-framework/security/audit"
 )
 
@@ -136,3 +140,56 @@ func TestEngine_UseAudit_Integration(t *testing.T) {
 		t.Errorf("target or actor incorrect: %+v, %+v", entry.Target, entry.Actor)
 	}
 }
+
+func TestNewSecure_StructuredLoggingIntegration(t *testing.T) {
+	cfg := DefaultConfig()
+	var buf bytes.Buffer
+	cfg.Log.Output = &buf
+	cfg.Log.Format = log.FormatJSON
+
+	app := NewWithConfig(cfg)
+	if app.Echo.Logger == nil {
+		t.Fatalf("expected structured logger to be initialized")
+	}
+
+	if app.LogLevel() != log.LevelInfo {
+		t.Errorf("expected initial log level INFO, got %v", app.LogLevel())
+	}
+
+	// Test dynamic level adjustment on the engine
+	app.SetLogLevel(log.LevelDebug)
+	if app.LogLevel() != log.LevelDebug {
+		t.Errorf("expected adjusted log level DEBUG, got %v", app.LogLevel())
+	}
+
+	app.GET("/users/:id", func(c *Context) error {
+		logger := LogFromContext(c)
+		logger.Info("retrieving user profile", "user_id", c.Param("id"))
+		return c.JSON(http.StatusOK, Map{"id": c.Param("id"), "name": "Alice"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d", rec.Code)
+	}
+
+	reqID := rec.Header().Get(echo.HeaderXRequestID)
+	if reqID == "" {
+		t.Errorf("expected X-Request-ID to be set in response header")
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "retrieving user profile") {
+		t.Errorf("expected handler log in output, got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "HTTP request") {
+		t.Errorf("expected request logger entry in output, got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, reqID) {
+		t.Errorf("expected request ID %s in log output, got: %s", reqID, logOutput)
+	}
+}
+
