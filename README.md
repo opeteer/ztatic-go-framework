@@ -57,7 +57,13 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
   ```
 * **Data Privacy:** AES-256-GCM database field encryption (`crypto.EncryptedString` and `ztatic:"encrypt"` via `BaseRepository`, initialized with `app.SetCipherKey` or `ZTATIC_CIPHER_KEY`), Argon2id password hashing, and PII scrubbing for `slog`.
 
-### 7. Developer CLI (`ztatic`)
+### 7. Zero-Trust Audit Logging Engine (`security/audit`)
+* **Compliance-Grade Event Ledger:** Captures Actor (ID, Role, Tenant, IP), Target resource, Action verb, Outcome status, Context (Request ID, route, latency), and State Diffs, complying with SOC 2, HIPAA, ISO 27001, and NIST SP 800-92 standards.
+* **Pluggable Multi-Format Serialization:** Built-in formatters for **JSON/NDJSON**, **CNCF CloudEvents v1.0.2**, **Micro Focus CEF (Common Event Format)** for SIEM ingestion, and human-readable terminal output with ANSI colors.
+* **Flexible Sinks & Schedulers:** Choose between deterministic `SyncLogger` (fail-closed mode for strict financial systems) or high-throughput `AsyncLogger` with non-blocking channel queues, worker pools, and overflow drop/block/fallback policies. Supports `WriterSink` (stdout/stderr), `FileSink` (append-only with fsync), `MemorySink` (testing & admin queries), `MultiSink` (fan-out broadcast), and `WebhookSink`.
+* **Zero-Config Middleware & Deep Sanitization:** Automatically audits all state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) and error responses (`status >= 400`), while automatically redacting sensitive credentials and PII (passwords, tokens, keys) in metadata and diffs.
+
+### 8. Developer CLI (`ztatic`)
 * **Cobra CLI Suite:** Built on `spf13/cobra` for scaffolding, running, and building applications.
 * **Live Reload Engine:** `ztatic dev` monitors `.go`, `.templ`, `.css`, and `.js` files using `fsnotify` with a 100ms debouncer.
 * **Single-Binary Compiler:** `ztatic build` executes a 4-step pipeline (`templ generate`, `esbuild`, manifest generation, `go build`) to create an optimized production binary.
@@ -196,6 +202,38 @@ Connect in HTML without writing custom JavaScript:
 ```html
 <turbo-stream-from src="/sse?topic=chat-room"></turbo-stream-from>
 <div id="chat-box"></div>
+```
+
+### 3. Compliance & Audit Logging (`security/audit`)
+
+Audit logging is pre-wired in `NewSecure()`. State-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) and error responses (`status >= 400`) are automatically audited. You can enrich the audit ledger directly within request handlers:
+
+```go
+package main
+
+import (
+	"ztatic-go-framework"
+	"ztatic-go-framework/security/audit"
+)
+
+func RegisterInvoiceRoutes(app *ztatic.Engine) {
+	app.POST("/api/invoices/:id/pay", func(c *ztatic.Context) error {
+		invoiceID := c.Param("id")
+
+		// Enrich current request audit entry with target, category, diffs, and metadata
+		if entry := ztatic.AuditFromContext(c); entry != nil {
+			entry.WithTarget("invoice", invoiceID, "March Subscription").
+				WithCategory(audit.CategoryData).
+				WithDiff(
+					map[string]any{"status": "unpaid", "paid_at": nil},
+					map[string]any{"status": "paid", "paid_at": "2026-09-27T02:49:00Z"},
+				).
+				WithMetadata("gateway", "stripe")
+		}
+
+		return c.JSON(200, ztatic.Map{"status": "paid"})
+	})
+}
 ```
 
 ---

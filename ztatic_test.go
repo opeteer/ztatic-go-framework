@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"ztatic-go-framework/security/audit"
 )
 
 func TestNewSecure(t *testing.T) {
@@ -88,7 +89,50 @@ func TestNew_LeanEngine(t *testing.T) {
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if !cfg.Security.EnableHeaders || !cfg.Security.EnableWAF || !cfg.Security.EnableCSRF || !cfg.Security.EnableRateLimiter {
-		t.Errorf("expected default config to enable all web security modules")
+	if !cfg.Security.EnableHeaders || !cfg.Security.EnableWAF || !cfg.Security.EnableCSRF || !cfg.Security.EnableRateLimiter || !cfg.Security.EnableAudit {
+		t.Errorf("expected default config to enable all web security modules including audit")
+	}
+}
+
+func TestNewSecure_AuditLogger(t *testing.T) {
+	app := NewSecure()
+	if app.AuditLogger() == nil {
+		t.Errorf("expected AuditLogger to be initialized by NewSecure")
+	}
+}
+
+func TestEngine_UseAudit_Integration(t *testing.T) {
+	app := New()
+	memSink := audit.NewMemorySink(10)
+	auditLogger := audit.NewSyncLogger(audit.NewJSONFormatter(false), memSink, false)
+
+	cfg := audit.DefaultAuditConfig()
+	cfg.Logger = auditLogger
+	app.UseAudit(cfg)
+
+	app.POST("/items", func(c *Context) error {
+		AuditRecord(c, "inventory.item.create", "item", "item_42")
+		return c.String(http.StatusCreated, "item created")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/items", nil)
+	req.Header.Set("X-User-ID", "inventory_clerk")
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d", rec.Code)
+	}
+
+	if memSink.Len() != 1 {
+		t.Fatalf("expected 1 audit entry recorded via Engine.UseAudit, got %d", memSink.Len())
+	}
+
+	entry := memSink.Last()
+	if entry.Action != "inventory.item.create" {
+		t.Errorf("expected action 'inventory.item.create', got %s", entry.Action)
+	}
+	if entry.Target.ID != "item_42" || entry.Actor.ID != "inventory_clerk" {
+		t.Errorf("target or actor incorrect: %+v, %+v", entry.Target, entry.Actor)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	
 	"ztatic-go-framework/rapid"
+	"ztatic-go-framework/security/audit"
 	"ztatic-go-framework/security/crypto"
 	"ztatic-go-framework/security/web"
 )
@@ -15,7 +16,24 @@ import (
 // with enterprise-grade Zero-Trust Security defaults.
 type Engine struct {
 	*echo.Echo
-	wafCfg *web.WAFConfig // pointer allows SetMaxBodySize to adjust WAF limit after construction
+	wafCfg      *web.WAFConfig // pointer allows SetMaxBodySize to adjust WAF limit after construction
+	auditLogger audit.Logger
+}
+
+// AuditLogger returns the active audit logger instance, or nil if disabled.
+func (eng *Engine) AuditLogger() audit.Logger {
+	return eng.auditLogger
+}
+
+// SetAuditLogger sets a custom audit logger on the engine.
+func (eng *Engine) SetAuditLogger(l audit.Logger) {
+	eng.auditLogger = l
+}
+
+// UseAudit mounts the audit logging middleware onto the engine.
+func (eng *Engine) UseAudit(cfg audit.AuditConfig) {
+	eng.auditLogger = cfg.Logger
+	eng.Use(audit.AuditWithConfig(cfg))
 }
 
 // SetCipherSuite configures the AES-256-GCM cipher suite on the engine and sets it as default for field encryption.
@@ -53,6 +71,20 @@ type HandlerFunc = echo.HandlerFunc
 type Map map[string]any
 type Group = echo.Group
 
+type AuditEntry = audit.Entry
+type AuditLogger = audit.Logger
+type AuditConfig = audit.AuditConfig
+
+// AuditFromContext retrieves the active audit entry from the request context.
+func AuditFromContext(c *Context) *audit.Entry {
+	return audit.FromContext(c)
+}
+
+// AuditRecord records a domain audit event on the active request context.
+func AuditRecord(c *Context, action string, targetType, targetID string) *audit.Entry {
+	return audit.Record(c, action, targetType, targetID)
+}
+
 // NewSecure initializes a new Ztatic Engine pre-wired with the complete
 // Zero-Trust Web Security Suite. It is safe by default.
 func NewSecure() *Engine {
@@ -84,11 +116,21 @@ func NewWithConfig(cfg Config) *Engine {
 	if cfg.Security.EnableRateLimiter {
 		e.Use(web.AdaptiveRateLimiterWithConfig(cfg.Security.RateLimiter))
 	}
+
+	var auditLogger audit.Logger
+	if cfg.Security.EnableAudit {
+		auditCfg := cfg.Security.Audit
+		if auditCfg.Logger == nil {
+			auditCfg = audit.DefaultAuditConfig()
+		}
+		auditLogger = auditCfg.Logger
+		e.Use(audit.AuditWithConfig(auditCfg))
+	}
 	
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
 	
-	eng := &Engine{Echo: e, wafCfg: &wafCfgCopy}
+	eng := &Engine{Echo: e, wafCfg: &wafCfgCopy, auditLogger: auditLogger}
 
 	// Auto-configure AES-256 field encryption cipher suite if environment variable is present
 	if keyStr := os.Getenv("ZTATIC_CIPHER_KEY"); keyStr != "" {

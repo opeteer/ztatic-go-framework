@@ -7,6 +7,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+
+	"ztatic-go-framework/security/audit"
 )
 
 // Config defines the top-level configuration for the web security middleware suite.
@@ -15,11 +17,13 @@ type Config struct {
 	EnableWAF         bool
 	EnableCSRF        bool
 	EnableRateLimiter bool
+	EnableAudit       bool
 
 	Headers     HeaderConfig
 	WAF         WAFConfig
 	CSRF        middleware.CSRFConfig
 	RateLimiter middleware.RateLimiterConfig
+	Audit       audit.AuditConfig
 }
 
 // HeaderConfig defines the configuration for the SecureHeaders middleware.
@@ -47,11 +51,13 @@ func DefaultConfig() Config {
 		EnableWAF:         true,
 		EnableCSRF:        true,
 		EnableRateLimiter: true,
+		EnableAudit:       true,
 
 		Headers:     DefaultHeaderConfig(),
 		WAF:         DefaultWAFConfig(),
 		CSRF:        DefaultCSRFConfig(),
 		RateLimiter: DefaultRateLimiterConfig(),
+		Audit:       audit.DefaultAuditConfig(),
 	}
 }
 
