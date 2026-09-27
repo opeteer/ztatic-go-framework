@@ -6,12 +6,15 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/redis/go-redis/v9"
 
 	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
 	"ztatic-go-framework/security/audit"
 	"ztatic-go-framework/security/crypto"
+	"ztatic-go-framework/security/session"
+	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
 )
 
@@ -19,9 +22,11 @@ import (
 // with enterprise-grade Zero-Trust Security defaults.
 type Engine struct {
 	*echo.Echo
-	wafCfg      *web.WAFConfig // pointer allows SetMaxBodySize to adjust WAF limit after construction
-	auditLogger audit.Logger
-	logLevelVar *slog.LevelVar
+	wafCfg       *web.WAFConfig // pointer allows SetMaxBodySize to adjust WAF limit after construction
+	auditLogger  audit.Logger
+	tokenManager *token.Manager
+	sessionStore session.Store
+	logLevelVar  *slog.LevelVar
 }
 
 // AuditLogger returns the active audit logger instance, or nil if disabled.
@@ -38,6 +43,39 @@ func (eng *Engine) SetAuditLogger(l audit.Logger) {
 func (eng *Engine) UseAudit(cfg audit.AuditConfig) {
 	eng.auditLogger = cfg.Logger
 	eng.Use(audit.AuditWithConfig(cfg))
+}
+
+// TokenManager returns the engine's active token manager.
+func (eng *Engine) TokenManager() *token.Manager {
+	return eng.tokenManager
+}
+
+// SetTokenManager registers a token manager on the engine.
+func (eng *Engine) SetTokenManager(tm *token.Manager) {
+	eng.tokenManager = tm
+}
+
+// UseToken mounts token authentication middleware onto the engine.
+func (eng *Engine) UseToken(tm *token.Manager) {
+	eng.tokenManager = tm
+	eng.Use(token.TokenAuth(tm))
+}
+
+// SessionStore returns the active session store on the engine.
+func (eng *Engine) SessionStore() session.Store {
+	return eng.sessionStore
+}
+
+// UseSession mounts session middleware with the specified store onto the engine.
+func (eng *Engine) UseSession(store session.Store) {
+	eng.sessionStore = store
+	eng.Use(session.Middleware(store))
+}
+
+// UseSessionWithConfig mounts session middleware with custom configuration.
+func (eng *Engine) UseSessionWithConfig(cfg session.SessionConfig) {
+	eng.sessionStore = cfg.Store
+	eng.Use(session.MiddlewareWithConfig(cfg))
 }
 
 // SetLogLevel dynamically changes the engine's structured log severity at runtime.
@@ -94,6 +132,22 @@ type AuditEntry = audit.Entry
 type AuditLogger = audit.Logger
 type AuditConfig = audit.AuditConfig
 
+// Token & Session DX Aliases
+type Token = token.Token
+type TokenManager = token.Manager
+type TokenConfig = token.Config
+type TokenPair = token.TokenPair
+type Claims = token.Claims
+type StandardClaims = token.StandardClaims
+type GenericClaims[T any] = token.GenericClaims[T]
+
+type Session = session.Session
+type SessionStore = session.Store
+type SessionConfig = session.SessionConfig
+type MemoryStore = session.MemoryStore
+type RedisStore = session.RedisStore
+type CookieStore = session.CookieStore
+
 type Logger = *slog.Logger
 type LogLevel = slog.Level
 type LogConfig = log.Config
@@ -133,6 +187,61 @@ func LogFromContext(c *Context) *slog.Logger {
 		return c.Logger()
 	}
 	return log.Default()
+}
+
+// TokenFromContext retrieves the verified cryptographic token from the request context.
+func TokenFromContext(c *Context) *token.Token {
+	return token.FromContext(c)
+}
+
+// ClaimsFromContext retrieves the verified claims from the request context.
+func ClaimsFromContext(c *Context) *token.Claims {
+	return token.ClaimsFromContext(c)
+}
+
+// SessionFromContext retrieves the active user session from the request context.
+func SessionFromContext(c *Context) *session.Session {
+	return session.FromContext(c)
+}
+
+// RequireAuth enforces that a valid authenticated token or session exists.
+func RequireAuth() echo.MiddlewareFunc {
+	return token.RequireAuth()
+}
+
+// RequireRole enforces that the authenticated claims contain at least one of the specified roles.
+func RequireRole(roles ...string) echo.MiddlewareFunc {
+	return token.RequireRole(roles...)
+}
+
+// RequireScope enforces that the authenticated claims contain all specified permission scopes.
+func RequireScope(scopes ...string) echo.MiddlewareFunc {
+	return token.RequireScope(scopes...)
+}
+
+// RequireTenant enforces multi-tenant boundary checks.
+func RequireTenant(tenantID string) echo.MiddlewareFunc {
+	return token.RequireTenant(tenantID)
+}
+
+// NewMemorySessionStore creates a thread-safe in-memory session store.
+func NewMemorySessionStore() *session.MemoryStore {
+	return session.NewMemoryStore()
+}
+
+// NewCookieSessionStore creates a stateless AES-256-GCM encrypted cookie session store.
+func NewCookieSessionStore(cs *crypto.CipherSuite) (*session.CookieStore, error) {
+	return session.NewCookieStore(cs)
+}
+
+// NewRedisSessionStore creates a distributed Redis session store.
+func NewRedisSessionStore(client redis.UniversalClient) *session.RedisStore {
+	return session.NewRedisStore(client)
+}
+
+// NewTokenManager creates a token manager with the provided config.
+func NewTokenManager(cfg token.Config) (*token.Manager, error) {
+	return token.NewManager(cfg)
 }
 
 // NewSecure initializes a new Ztatic Engine pre-wired with the complete
@@ -195,6 +304,20 @@ func NewWithConfig(cfg Config) *Engine {
 		e.Use(audit.AuditWithConfig(auditCfg))
 	}
 
+	var sessionStore session.Store
+	if cfg.Session != nil {
+		sessionStore = cfg.Session.Store
+		e.Use(session.MiddlewareWithConfig(*cfg.Session))
+	}
+
+	var tokenManager *token.Manager
+	if cfg.Token != nil {
+		if tm, err := token.NewManager(*cfg.Token); err == nil {
+			tokenManager = tm
+			e.Use(token.TokenAuth(tm))
+		}
+	}
+
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
 
@@ -202,10 +325,12 @@ func NewWithConfig(cfg Config) *Engine {
 	e.HTTPErrorHandler = errors.NewHTTPErrorHandler(cfg.Error)
 
 	eng := &Engine{
-		Echo:        e,
-		wafCfg:      &wafCfgCopy,
-		auditLogger: auditLogger,
-		logLevelVar: cfg.Log.LevelVar,
+		Echo:         e,
+		wafCfg:       &wafCfgCopy,
+		auditLogger:  auditLogger,
+		tokenManager: tokenManager,
+		sessionStore: sessionStore,
+		logLevelVar:  cfg.Log.LevelVar,
 	}
 
 	// Auto-configure AES-256 field encryption cipher suite if environment variable is present

@@ -207,6 +207,21 @@ func (o *OpenAPIGenerator) BuildOpenAPI(e *echo.Echo) map[string]any {
 					"scheme":       "bearer",
 					"bearerFormat": "JWT",
 				},
+				"bearerAuth": map[string]string{
+					"type":         "http",
+					"scheme":       "bearer",
+					"bearerFormat": "JWT",
+				},
+				"CookieAuth": map[string]string{
+					"type": "apiKey",
+					"in":   "cookie",
+					"name": "ztatic_session",
+				},
+				"cookieAuth": map[string]string{
+					"type": "apiKey",
+					"in":   "cookie",
+					"name": "ztatic_session",
+				},
 			},
 		},
 		"paths": paths,

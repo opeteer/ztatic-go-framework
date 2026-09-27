@@ -3,6 +3,8 @@ package ztatic
 import (
 	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
+	"ztatic-go-framework/security/session"
+	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
 )
 
@@ -16,6 +18,12 @@ type Config struct {
 
 	// Error contains the standardized error handling configuration.
 	Error errors.Config
+
+	// Session contains optional default session configuration.
+	Session *session.SessionConfig
+
+	// Token contains optional default token manager configuration.
+	Token *token.Config
 }
 
 // DefaultConfig returns the default enterprise-grade Zero-Trust configuration.

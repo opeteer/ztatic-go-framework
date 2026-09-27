@@ -341,6 +341,82 @@ Standardized API Error Output (HTTP 422):
 }
 ```
 
+### 6. Secure Token & Session Abstraction (`security/token` & `security/session`)
+
+Ztatic provides a unified identity and authorization system designed for both stateful HOTW web applications and stateless REST/real-time APIs:
+
+#### Cryptographic Tokens (JWT, AEAD-Encrypted, and Refresh Tokens)
+```go
+package main
+
+import (
+	"ztatic-go-framework"
+	"ztatic-go-framework/security/token"
+)
+
+func SetupAuth(app *ztatic.Engine) {
+	// Initialize Token Manager with RFC 8725 hardened cryptographic defaults
+	secret := []byte(os.Getenv("AUTH_SECRET")) // Minimum 32 bytes (256 bits)
+	tokenMgr, _ := ztatic.NewTokenManager(token.DefaultConfig(secret))
+	app.SetTokenManager(tokenMgr)
+
+	// Issue token pair (access token + refresh token with single-use rotation)
+	app.POST("/api/login", func(c *ztatic.Context) error {
+		pair, err := tokenMgr.CreateTokenPair(c.Request().Context(), &ztatic.Claims{
+			StandardClaims: ztatic.StandardClaims{Subject: "user-123"},
+			Roles:          []string{"admin"},
+			Scopes:         []string{"read:users", "write:users"},
+			TenantID:       "tenant-alpha",
+		})
+		if err != nil {
+			return ztatic.ErrInternal("Failed to generate token pair")
+		}
+		return c.JSON(200, pair)
+	})
+
+	// Guard endpoints using declarative role and scope middleware
+	api := app.Group("/api", token.TokenAuth(tokenMgr))
+	api.GET("/admin/stats", func(c *ztatic.Context) error {
+		claims := ztatic.ClaimsFromContext(c)
+		return c.JSON(200, ztatic.Map{"admin": claims.Subject})
+	}, ztatic.RequireRole("admin"), ztatic.RequireScope("read:users"))
+}
+```
+
+#### Browser Sessions (Stateful & Stateless Encrypted)
+```go
+package main
+
+import (
+	"ztatic-go-framework"
+)
+
+func SetupSessions(app *ztatic.Engine) {
+	// Choose MemoryStore, RedisStore, or stateless AES-256-GCM CookieStore
+	store := ztatic.NewMemorySessionStore()
+	app.UseSession(store)
+
+	// Login and prevent Session Fixation attacks
+	app.POST("/login", func(c *ztatic.Context) error {
+		sess := ztatic.SessionFromContext(c)
+		_ = sess.RegenerateID() // Issues new session ID, purges old ID from backend
+		sess.Set("user_id", "user-123")
+		sess.Flash("notice", "You have successfully signed in")
+		return c.Redirect(303, "/dashboard")
+	})
+
+	// Read session and consume flash messages
+	app.GET("/dashboard", func(c *ztatic.Context) error {
+		sess := ztatic.SessionFromContext(c)
+		flashes := sess.Flashes("notice")
+		return c.Render(200, "dashboard.html", ztatic.Map{
+			"user_id": sess.GetString("user_id"),
+			"flashes": flashes,
+		})
+	})
+}
+```
+
 ---
 
 ## Development & Production Workflow
