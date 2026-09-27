@@ -71,7 +71,14 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **Dynamic Level Switching:** Dynamically adjust log severity at runtime via `app.SetLogLevel(...)` and `slog.LevelVar` without restarting the server.
 * **Zero-Trust Privacy Scrubbing:** Seamlessly integrates with `security/privacy.LogMasker` to scrub passwords, tokens, API keys, and sensitive data from all emitted log records.
 
-### 9. Developer CLI (`ztatic`)
+### 9. Standardized Error Handling & Resilience (`errors`)
+* **Clean Architecture Domain Errors:** Decouples business logic from HTTP transport concerns via `errors.Error` / `ztatic.AppError` (supporting machine codes, user-facing safe messages, internal causes, field violations, and metadata).
+* **Automatic HTTP & Runtime Mapping:** Maps domain codes (`NOT_FOUND` -> 404, `VALIDATION_FAILED` -> 422, etc.), standard library errors (`sql.ErrNoRows`, `data.ErrNotFound`, `os.ErrNotExist` -> 404), and `validator.ValidationErrors` into rich structured payloads automatically.
+* **Dual Wire Representation:** Supports both standard REST API envelopes (`{"error": {...}}`) and **RFC 9457 / RFC 7807 Problem Details** (`application/problem+json`).
+* **Zero-Trust Information Hiding:** In production (`APP_ENV=production`), 5xx internal database errors, SQL queries, and stack traces are scrubbed and replaced with reference-guided safe messages. In development, complete root causes and call stacks are exposed.
+* **Centralized Interception & Panic Recovery:** Replaces standard error handlers with a unified pipeline that coordinates with `slog` structured logging and `security/audit` ledgers, while recovering gracefully from runtime panics.
+
+### 10. Developer CLI (`ztatic`)
 * **Cobra CLI Suite:** Built on `spf13/cobra` for scaffolding, running, and building applications.
 * **Live Reload Engine:** `ztatic dev` monitors `.go`, `.templ`, `.css`, and `.js` files using `fsnotify` with a 100ms debouncer.
 * **Single-Binary Compiler:** `ztatic build` executes a 4-step pipeline (`templ generate`, `esbuild`, manifest generation, `go build`) to create an optimized production binary.
@@ -271,6 +278,66 @@ func RegisterUserRoutes(app *ztatic.Engine) {
 
 		return c.JSON(200, ztatic.Map{"id": c.Param("id"), "status": "active"})
 	})
+}
+```
+
+### 5. Standardized Domain Errors & Struct Validation (`errors`)
+
+Ztatic automatically catches handler errors, panics, and validation errors, transforming them into standardized API responses with correlated request IDs:
+
+```go
+package main
+
+import (
+	"ztatic-go-framework"
+	"ztatic-go-framework/rapid"
+)
+
+type CreateUserInput struct {
+	Name  string `json:"name" validate:"required,min=3"`
+	Email string `json:"email" validate:"required,email"`
+}
+
+func RegisterAccountRoutes(app *ztatic.Engine) {
+	// 1. Struct validation errors automatically map to HTTP 422 with granular field details
+	app.POST("/api/users", func(c *ztatic.Context) error {
+		var input CreateUserInput
+		if err := rapid.BindAndValidate(c, &input); err != nil {
+			return err // Automatically serialized into standardized validation error JSON
+		}
+		return c.JSON(201, ztatic.Map{"status": "created"})
+	})
+
+	// 2. Clean Architecture: return domain errors without importing net/http
+	app.GET("/api/accounts/:id", func(c *ztatic.Context) error {
+		account, err := findAccount(c.Param("id"))
+		if err != nil {
+			return ztatic.ErrNotFound("account does not exist").
+				WithMetadata("account_id", c.Param("id"))
+		}
+		return c.JSON(200, account)
+	})
+}
+```
+
+Standardized API Error Output (HTTP 422):
+```json
+{
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "Validation failed on 1 field(s)",
+    "status": 422,
+    "details": [
+      {
+        "field": "Email",
+        "rule": "email",
+        "message": "Field 'Email' must be a valid email address",
+        "value": "invalid-address"
+      }
+    ],
+    "request_id": "req-18d9110b48fd8d58-c28ef1ad-0001",
+    "timestamp": "2026-09-27T10:52:00Z"
+  }
 }
 ```
 

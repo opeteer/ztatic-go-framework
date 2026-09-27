@@ -2,10 +2,10 @@ package rapid
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v5"
+	"ztatic-go-framework/errors"
 )
 
 // StructValidator implements the echo.Validator interface, wrapping
@@ -22,10 +22,8 @@ func NewStructValidator() *StructValidator {
 // Validate executes the validation tags on the given struct.
 func (cv *StructValidator) Validate(i any) error {
 	if err := cv.validator.Struct(i); err != nil {
-		// Wrap validation errors in a clean HTTP 400 Bad Request response.
-		// In a production environment, this could be customized to return
-		// structured JSON containing specific field violations.
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		// Map struct validation errors into a standardized *errors.Error with field violations.
+		return errors.Map(err)
 	}
 	return nil
 }
@@ -36,7 +34,7 @@ func (cv *StructValidator) Validate(i any) error {
 func BindAndValidate(c *echo.Context, i any) error {
 	// 1. Bind payload to struct
 	if err := c.Bind(i); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Binding error: %v", err))
+		return errors.BadRequest(fmt.Sprintf("Binding error: %v", err)).WithInternal(err)
 	}
 	
 	// 2. Validate struct tags using the Engine's registered Validator

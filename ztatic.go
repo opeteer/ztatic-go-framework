@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 
+	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
 	"ztatic-go-framework/security/audit"
@@ -97,6 +98,24 @@ type Logger = *slog.Logger
 type LogLevel = slog.Level
 type LogConfig = log.Config
 
+type AppError = errors.Error
+type FieldViolation = errors.FieldViolation
+type ErrorConfig = errors.Config
+
+// Error constructors for rapid DX
+func NewError(code, message string) *errors.Error { return errors.New(code, message) }
+func WrapError(err error, code, message string) *errors.Error { return errors.Wrap(err, code, message) }
+func ErrBadRequest(message string) *errors.Error { return errors.BadRequest(message) }
+func ErrUnauthorized(message string) *errors.Error { return errors.Unauthorized(message) }
+func ErrForbidden(message string) *errors.Error { return errors.Forbidden(message) }
+func ErrNotFound(message string) *errors.Error { return errors.NotFound(message) }
+func ErrConflict(message string) *errors.Error { return errors.Conflict(message) }
+func ErrValidation(message string, violations ...errors.FieldViolation) *errors.Error {
+	return errors.Validation(message, violations...)
+}
+func ErrInternal(message string) *errors.Error { return errors.Internal(message) }
+func ErrRateLimited(message string) *errors.Error { return errors.RateLimited(message) }
+
 // AuditFromContext retrieves the active audit entry from the request context.
 func AuditFromContext(c *Context) *audit.Entry {
 	return audit.FromContext(c)
@@ -179,6 +198,9 @@ func NewWithConfig(cfg Config) *Engine {
 	// Register the high-performance Struct Validator for Rapid DX
 	e.Validator = rapid.NewStructValidator()
 
+	// Standardized Error Handling Pipeline
+	e.HTTPErrorHandler = errors.NewHTTPErrorHandler(cfg.Error)
+
 	eng := &Engine{
 		Echo:        e,
 		wafCfg:      &wafCfgCopy,
@@ -201,6 +223,7 @@ func NewWithConfig(cfg Config) *Engine {
 // primarily for internal services or APIs behind another gateway.
 func New() *Engine {
 	e := echo.New()
+	e.HTTPErrorHandler = errors.NewHTTPErrorHandler(errors.DefaultConfig())
 	e.Use(middleware.Recover())
 	return &Engine{Echo: e}
 }

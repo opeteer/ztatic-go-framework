@@ -2,6 +2,8 @@ package ztatic
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -192,4 +194,121 @@ func TestNewSecure_StructuredLoggingIntegration(t *testing.T) {
 		t.Errorf("expected request ID %s in log output, got: %s", reqID, logOutput)
 	}
 }
+
+func TestNewSecure_StandardizedErrors_NotFound(t *testing.T) {
+	app := NewSecure()
+
+	app.GET("/api/products/:id", func(c *Context) error {
+		return ErrNotFound("product 999 does not exist")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/products/999", nil)
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", rec.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+
+	errMap, ok := body["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected 'error' object in JSON: %s", rec.Body.String())
+	}
+
+	if errMap["code"] != "NOT_FOUND" {
+		t.Errorf("expected code NOT_FOUND, got %v", errMap["code"])
+	}
+	if errMap["message"] != "product 999 does not exist" {
+		t.Errorf("expected message, got %v", errMap["message"])
+	}
+	if errMap["request_id"] == nil || errMap["request_id"] == "" {
+		t.Errorf("expected request_id in error envelope")
+	}
+}
+
+func TestNewSecure_StandardizedErrors_Validation(t *testing.T) {
+	app := NewSecure()
+
+	type CreateUserInput struct {
+		Username string `json:"username" validate:"required,min=4"`
+		Email    string `json:"email" validate:"required,email"`
+	}
+
+	app.POST("/api/users", func(c *Context) error {
+		var input CreateUserInput
+		input.Username = "abc"          // too short (< 4)
+		input.Email = "not-an-email"    // invalid email
+		if err := c.Validate(&input); err != nil {
+			return err
+		}
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/users", nil)
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 Unprocessable Entity, got %d", rec.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	errMap := body["error"].(map[string]any)
+	if errMap["code"] != "VALIDATION_FAILED" {
+		t.Errorf("expected code VALIDATION_FAILED, got %v", errMap["code"])
+	}
+
+	details, ok := errMap["details"].([]any)
+	if !ok || len(details) != 2 {
+		t.Fatalf("expected 2 details violations, got %v", details)
+	}
+}
+
+func TestNewSecure_StandardizedErrors_ProductionSanitization(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Error.ExposeInternalErrors = false
+	cfg.Error.FallbackMessage = "Secure system error occurred"
+	app := NewWithConfig(cfg)
+
+	app.GET("/api/sensitive", func(c *Context) error {
+		sensitiveDBErr := errors.New("FATAL: password authentication failed for user postgres")
+		return ErrInternal("database error").WithInternal(sensitiveDBErr)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sensitive", nil)
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error, got %d", rec.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+
+	errMap := body["error"].(map[string]any)
+	msg := errMap["message"].(string)
+
+	if !strings.Contains(msg, "Secure system error occurred") {
+		t.Errorf("expected fallback message, got: %s", msg)
+	}
+	if strings.Contains(rec.Body.String(), "password authentication failed") {
+		t.Errorf("leaked sensitive database credentials in production error response!")
+	}
+}
+
 

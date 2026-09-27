@@ -1,6 +1,7 @@
 package ztatic
 
 import (
+	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/security/web"
 )
@@ -12,6 +13,9 @@ type Config struct {
 
 	// Log contains the structured logging engine configuration.
 	Log log.Config
+
+	// Error contains the standardized error handling configuration.
+	Error errors.Config
 }
 
 // DefaultConfig returns the default enterprise-grade Zero-Trust configuration.
@@ -19,5 +23,6 @@ func DefaultConfig() Config {
 	return Config{
 		Security: web.DefaultConfig(),
 		Log:      log.DefaultConfig(),
+		Error:    errors.DefaultConfig(),
 	}
 }
