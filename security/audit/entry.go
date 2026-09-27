@@ -178,6 +178,18 @@ func (e *Entry) WithOutcome(status OutcomeStatus, statusCode int, reason string)
 	e.Outcome.Status = status
 	e.Outcome.StatusCode = statusCode
 	e.Outcome.Reason = reason
+
+	// Align severity if it hasn't been explicitly upgraded
+	if e.Severity == SeverityInfo {
+		switch {
+		case status == OutcomeDenied || statusCode == 401 || statusCode == 403:
+			e.Severity = SeverityWarn
+		case status == OutcomeError || statusCode >= 500:
+			e.Severity = SeverityError
+		case status == OutcomeFailure || (statusCode >= 400 && statusCode < 500):
+			e.Severity = SeverityWarn
+		}
+	}
 	return e
 }
 

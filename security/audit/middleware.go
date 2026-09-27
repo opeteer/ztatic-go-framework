@@ -212,6 +212,27 @@ func AuditWithConfig(cfg AuditConfig) echo.MiddlewareFunc {
 			// Store entry in context for downstream handler enrichment
 			c.Set(ContextKeyAuditEntry, entry)
 
+			// Recover handler panics to guarantee audit visibility before re-panicking
+			defer func() {
+				if r := recover(); r != nil {
+					duration := time.Since(startTime)
+					entry.WithDuration(duration)
+					if c.Path() != "" {
+						entry.Context.Route = c.Path()
+					}
+					entry.Outcome.StatusCode = http.StatusInternalServerError
+					entry.Outcome.Status = OutcomeError
+					entry.Severity = SeverityError
+					entry.Outcome.Reason = fmt.Sprintf("panic: %v", r)
+
+					if cfg.Policy(c, entry) {
+						_ = cfg.Logger.Log(req.Context(), entry)
+					}
+					// Re-panic so Echo's Recover middleware can handle response committed
+					panic(r)
+				}
+			}()
+
 			// Execute handler chain
 			handlerErr := next(c)
 
