@@ -94,6 +94,14 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **Rapid Resource Integration:** `rapid.RegisterResource` natively supports `PaginatedResource[T]` and standard response envelopes (`response.OK`, `response.Created`, `response.Paginated`, `response.NoContent`).
 * **Ergonomic DX Helpers:** 1-import top-level helpers: `ztatic.OK(c, data)`, `ztatic.Created(c, data, loc)`, `ztatic.Paginated(c, items, meta)`, `ztatic.NoContent(c)`, `ztatic.ResponseError(c, err)`, and `response.Raw(c, status, data)` escape hatch.
 
+### 12. Zero-Trust Environment Configuration Engine (`config`)
+* **Type-Safe Struct Binding:** Binds environment variables into strongly-typed Go structs with `env`, `envDefault`, `envPrefix`, and `envSeparator` struct tags, supporting primitives, slices, `time.Duration`, `time.Time`, `url.URL`, and custom unmarshalers.
+* **4-Tier Dotenv Cascading:** Automatically loads configuration cascading across `.env` $\rightarrow$ `.env.local` $\rightarrow$ `.env.{profile}` $\rightarrow$ `.env.{profile}.local` with process `os.Environ()` overriding all files, and nested `${VAR:-default}` variable expansion.
+* **Fail-Fast Startup Validation:** Integrates directly with Ztatic's `validation.Engine` (`go-playground/validator/v10`) and zero-trust rules (`config_profile`, `secure_secret`, `https_url`, `db_dsn`, and `SelfValidator`) to reject misconfigured servers in sub-milliseconds with actionable startup diagnostics.
+* **Zero-Trust Secrets Protection:** `SecretString` and `Secret[T]` prevent accidental credential leakage by masking sensitive values in `fmt.Printf`, `slog` logs, and JSON serialization (`[REDACTED]`), supporting memory zeroization (`privacy.Zeroize`), Docker/Kubernetes file secret resolution (`file:///run/secrets/...`), and AES-256-GCM encrypted secrets (`enc:aes-gcm:...`).
+* **Multi-Environment Profiles:** Built-in profiles (`development`, `test`, `staging`, `production`) automatically detected via `ZTATIC_ENV`, `APP_ENV`, or `GO_ENV` with profile-specific engine defaults.
+* **1-Import Ergonomic Helpers:** `ztatic.LoadConfig[T]()`, `ztatic.MustLoadConfig[T]()`, `ztatic.ActiveProfile()`, and `ztatic.NewSecretString()`.
+
 ---
 
 ## Quick Start

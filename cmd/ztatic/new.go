@@ -37,6 +37,7 @@ var newCmd = &cobra.Command{
 		dirs := []string{
 			"cmd/server",
 			"internal/controllers",
+			"internal/config",
 			"internal/models",
 			"internal/repositories",
 			"internal/views/layouts",
@@ -71,6 +72,37 @@ var DistFS embed.FS
 		if err := os.WriteFile(filepath.Join(baseDir, "dist.go"), []byte(distGoContent), 0644); err != nil {
 			fmt.Printf("Error writing dist.go: %v\n", err)
 		}
+
+		// Generate internal/config/config.go
+		configGoContent := `package config
+
+import (
+	"ztatic-go-framework"
+)
+
+// AppConfig defines the type-safe environment configuration schema for this application.
+type AppConfig struct {
+	AppName string              ` + "`" + `env:"APP_NAME" envDefault:"myapp" validate:"required"` + "`" + `
+	Port    string              ` + "`" + `env:"PORT" envDefault:"8080" validate:"required"` + "`" + `
+	Secret  ztatic.SecretString ` + "`" + `env:"AUTH_SECRET" envDefault:"dev-secret-key-must-be-changed-in-production-min-32-bytes"` + "`" + `
+}
+`
+		if err := os.WriteFile(filepath.Join(baseDir, "internal/config", "config.go"), []byte(configGoContent), 0644); err != nil {
+			fmt.Printf("Error writing internal/config/config.go: %v\n", err)
+		}
+
+		// Generate .env and .env.example
+		envContent := fmt.Sprintf(`APP_NAME=%s
+PORT=8080
+AUTH_SECRET=dev-secret-key-must-be-changed-in-production-min-32-bytes
+`, moduleName)
+		_ = os.WriteFile(filepath.Join(baseDir, ".env"), []byte(envContent), 0644)
+
+		envExampleContent := `APP_NAME=myapp
+PORT=8080
+AUTH_SECRET=your-production-secret-must-be-at-least-32-bytes
+`
+		_ = os.WriteFile(filepath.Join(baseDir, ".env.example"), []byte(envExampleContent), 0644)
 
 		// Generate main.go stub
 		mainContent := fmt.Sprintf(`package main
@@ -123,6 +155,7 @@ package main
 
 import (
 	_ "github.com/a-h/templ"
+	_ "ztatic-go-framework/config"
 	_ "ztatic-go-framework/data"
 	_ "ztatic-go-framework/realtime"
 )
