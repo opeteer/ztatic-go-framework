@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"strings"
+	"os"
 	"testing"
 )
 
@@ -76,6 +76,9 @@ func TestDBEngine_TransactionSuccess(t *testing.T) {
 }
 
 func TestMigrationEngine_Run(t *testing.T) {
+	_ = os.MkdirAll("migrations", 0755)
+	defer os.RemoveAll("migrations")
+
 	db, _ := NewDBEngine("dummy", "test-dsn")
 	defer db.Close()
 

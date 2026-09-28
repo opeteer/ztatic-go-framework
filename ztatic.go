@@ -10,7 +10,7 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/redis/go-redis/v9"
 
-	"ztatic-go-framework/data"
+	"ztatic-go-framework/config"
 	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
@@ -132,6 +132,21 @@ type Context = echo.Context
 type HandlerFunc = echo.HandlerFunc
 type Map map[string]any
 type Group = echo.Group
+
+// Environment & Configuration DX Aliases
+type Profile = config.Profile
+type SecretString = config.SecretString
+type Secret[T any] = config.Secret[T]
+type ConfigValidationError = config.ConfigValidationError
+type ConfigViolation = config.ConfigViolation
+type ConfigOption = config.Option
+
+const (
+	ProfileDevelopment = config.ProfileDevelopment
+	ProfileTest        = config.ProfileTest
+	ProfileStaging     = config.ProfileStaging
+	ProfileProduction  = config.ProfileProduction
+)
 
 type AuditEntry = audit.Entry
 type AuditLogger = audit.Logger
@@ -273,37 +288,32 @@ func ExtractCursor(c *Context, opts ...response.CursorOption) response.CursorPar
 	return response.ExtractCursor(c, opts...)
 }
 
-// Data Persistence & Query Helper DX Aliases
-type DBEngine = data.DBEngine
-type BaseRepository[T any] = data.BaseRepository[T]
-type DBExecutor = data.DBExecutor
-type QueryOption = data.QueryOption
-type Scope = data.Scope
-type StructMetadata = data.StructMetadata
+// Environment & Configuration Helpers
 
-func NewDBEngine(driverName, dataSourceName string) (*data.DBEngine, error) {
-	return data.NewDBEngine(driverName, dataSourceName)
+// LoadConfig loads, decodes, and validates environment configuration into T.
+func LoadConfig[T any](opts ...config.Option) (*T, error) {
+	return config.Load[T](opts...)
 }
 
-func NewBaseRepository[T any](db *data.DBEngine, tableName string) *data.BaseRepository[T] {
-	return data.NewBaseRepository[T](db, tableName)
+// MustLoadConfig loads and validates environment configuration into T, panicking on validation failure.
+func MustLoadConfig[T any](opts ...config.Option) *T {
+	return config.MustLoad[T](opts...)
 }
 
-func WithTransaction(ctx context.Context, db *data.DBEngine, fn func(txCtx context.Context) error) error {
-	return data.WithTransaction(ctx, db, fn)
+// ActiveProfile returns the active application runtime profile.
+func ActiveProfile() config.Profile {
+	return config.ActiveProfile()
 }
 
-func WhereEq(col string, val any) data.QueryOption      { return data.WhereEq(col, val) }
-func WhereNotEq(col string, val any) data.QueryOption   { return data.WhereNotEq(col, val) }
-func WhereIn(col string, vals any) data.QueryOption     { return data.WhereIn(col, vals) }
-func WhereNotIn(col string, vals any) data.QueryOption  { return data.WhereNotIn(col, vals) }
-func WhereLike(col string, pat string) data.QueryOption { return data.WhereLike(col, pat) }
-func WhereGt(col string, val any) data.QueryOption      { return data.WhereGt(col, val) }
-func WhereLt(col string, val any) data.QueryOption      { return data.WhereLt(col, val) }
-func OrderBy(clauses ...string) data.QueryOption        { return data.OrderBy(clauses...) }
-func OrderByDesc(col string) data.QueryOption           { return data.OrderByDesc(col) }
-func OrderByAsc(col string) data.QueryOption            { return data.OrderByAsc(col) }
+// SetProfile explicitly sets the active application runtime profile.
+func SetProfile(p config.Profile) {
+	config.SetProfile(p)
+}
 
+// NewSecretString initializes an opaque SecretString wrapper.
+func NewSecretString(val string) config.SecretString {
+	return config.NewSecretString(val)
+}
 
 // AuditFromContext retrieves the active audit entry from the request context.
 func AuditFromContext(c *Context) *audit.Entry {
