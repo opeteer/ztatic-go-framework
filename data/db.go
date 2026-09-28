@@ -49,6 +49,15 @@ func (e *DBEngine) Close() error {
 	return e.SQL.Close()
 }
 
+// GetExecutor returns the active transaction executor from the context if present,
+// or defaults to the SQL connection pool.
+func (e *DBEngine) GetExecutor(ctx context.Context) DBExecutor {
+	if tx := TxFromContext(ctx); tx != nil {
+		return tx
+	}
+	return e.SQL
+}
+
 // Transaction executes a closure within an ACID-compliant database transaction.
 // It automatically handles Commit on success, and Rollback on error or panic.
 func (e *DBEngine) Transaction(ctx context.Context, fn func(tx *sql.Tx) error) error {
@@ -74,3 +83,10 @@ func (e *DBEngine) Transaction(ctx context.Context, fn func(tx *sql.Tx) error) e
 	// Commit if successful
 	return tx.Commit()
 }
+
+// TransactionCtx executes a closure with ambient transaction propagation via context.Context.
+// Any repository or query using the provided context automatically executes within the transaction.
+func (e *DBEngine) TransactionCtx(ctx context.Context, fn func(txCtx context.Context) error) error {
+	return WithTransaction(ctx, e, fn)
+}
+
