@@ -1,10 +1,10 @@
 # Ztatic Framework Tutorial: Building High-Performance Web Applications in Go
 
-Welcome to the official step-by-step tutorial for building modern, secure, enterprise-grade full-stack web applications using the **Ztatic Framework**.
+Welcome to the step-by-step tutorial for building modern, fast, full-stack web applications using the **Ztatic Framework**.
 
-Ztatic is a modern, open-source, full-stack Go framework built on top of **Echo v5**. It enables developers to craft fast, resilient, real-time web applications using the **HOTW (HTML Over The Wire)** paradigm—combining **Templ**, **Hotwire (Turbo 8)**, **Alpine.js**, native **esbuild** bundling, **OpenAPI 3.0 generation**, and **Realtime Pub/Sub (SSE & WebSockets)**—all without requiring Node.js, npm, or heavy frontend build pipelines.
+Ztatic is an open-source, full-stack Go framework built on top of **Echo v5**. It enables you to craft reactive, real-time web applications using the **HOTW (HTML Over The Wire)** stack—combining **Templ**, **Hotwire (Turbo 8)**, **Alpine.js**, native in-memory **esbuild** bundling, **OpenAPI 3.0 generation**, and **Realtime Pub/Sub (SSE & WebSockets)**—all without requiring Node.js, npm, or frontend build tools.
 
-Underneath the presentation layer, Ztatic provides an uncompromising **Zero-Trust** foundation: type-safe cascading environment configuration, W3C distributed tracing, structured operational logging, compliance audit trails, standardized domain error handling, canonical API response envelopes, and a fluid data tier powered by reflection mapping, Squirrel AST queries, Goose migrations, and generic repositories.
+Under the hood, Ztatic provides everything you need to build real-world applications: type-safe cascading configuration, W3C distributed tracing, structured logging, activity audit trails, standardized error handling, clean response envelopes, and a fluid data tier powered by reflection mapping, Squirrel AST queries, Goose migrations, and generic repositories.
 
 ---
 
@@ -14,12 +14,12 @@ Underneath the presentation layer, Ztatic provides an uncompromising **Zero-Trus
 2. [Ztatic Framework Directory & Module Structure](#2-ztatic-framework-directory--module-structure)
 3. [Step 1: Environment Setup & Installing the `ztatic` CLI](#step-1-environment-setup--installing-the-ztatic-cli)
 4. [Step 2: Scaffolding a New Application](#step-2-scaffolding-a-new-application)
-5. [Step 3: Zero-Trust Environment Configuration (`config`)](#step-3-zero-trust-environment-configuration-config)
+5. [Step 3: Configuration & Environment Management (`config`)](#step-3-configuration--environment-management-config)
 6. [Step 4: Database & Data Tier Setup (Engine, Mapper, Migrations & Transactions)](#step-4-database--data-tier-setup-engine-mapper-migrations--transactions)
 7. [Step 5: Crafting Views (Layouts, Templ Components & Micro-Interactions)](#step-5-crafting-views-layouts-templ-components--micro-interactions)
 8. [Step 6: Implementing Rapid REST APIs, Input Sanitization & OpenAPI Docs](#step-6-implementing-rapid-rest-apis-input-sanitization--openapi-docs)
 9. [Step 7: Adding Real-Time Updates (SSE, WebSockets & Pub/Sub)](#step-7-adding-real-time-updates-sse-websockets--pubsub)
-10. [Step 8: Zero-Trust Observability (W3C Tracing, Structured Logging & Audit Trail)](#step-8-zero-trust-observability-w3c-tracing-structured-logging--audit-trail)
+10. [Step 8: Observability: Tracing, Logging & Activity Ledger](#step-8-observability-tracing-logging--activity-ledger)
 11. [Step 9: Asset Management & Client Integration](#step-9-asset-management--client-integration)
 12. [Step 10: Assembling the Full Application Server (`cmd/server/main.go`)](#step-10-assembling-the-full-application-server-cmdservermaingo)
 13. [Step 11: Development Workflow (Live Reload)](#step-11-development-workflow-live-reload)
@@ -30,7 +30,7 @@ Underneath the presentation layer, Ztatic provides an uncompromising **Zero-Trus
 
 ## 1. Understanding the Ztatic Architecture
 
-Before writing code, it is essential to understand how Ztatic operates end-to-end.
+Before writing code, let's look at how Ztatic operates under the hood.
 
 ```text
                   ┌────────────────────────────────────────────────────────┐
@@ -43,11 +43,11 @@ Before writing code, it is essential to understand how Ztatic operates end-to-en
        ┌────────────────────────────────────────────────────────────────┐
        │                      Ztatic Engine                             │
        │  ┌──────────────────────────────────────────────────────────┐  │
-       │  │ Observability Pipeline (W3C Tracing, Request ID, Slog)   │  │
+       │  │ Tracing & Logging (W3C Trace Context, Request ID, Slog)  │  │
        │  └────────────────────────────┬─────────────────────────────┘  │
        │                               ▼                                │
        │  ┌──────────────────────────────────────────────────────────┐  │
-       │  │ Security Pipeline (WAF, CSP Nonces, CSRF, Audit Ledger)  │  │
+       │  │ Web Security (WAF, CSP Nonces, CSRF, Activity Ledger)    │  │
        │  └────────────────────────────┬─────────────────────────────┘  │
        │                               ▼                                │
        │  ┌──────────────────────────────────────────────────────────┐  │
@@ -63,29 +63,29 @@ Before writing code, it is essential to understand how Ztatic operates end-to-en
        │         └─────────────┼─────────────┼─────────────┘            │
        │                       ▼             ▼                          │
        │          ┌──────────────────────────────────────┐              │
-       │          │ Zero-Trust Config, Secrets & Errors  │              │
+       │          │   Config, Dotenv, Secrets & Errors   │              │
        │          └──────────────────────────────────────┘              │
        └────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Technical Pillars
 
-1. **Zero Node.js Overhead**: Native Go bindings run `esbuild` directly in memory to transpile TypeScript, bundle JavaScript, and compile CSS in under 10 milliseconds without requiring npm, yarn, or Node.js runtimes.
-2. **HTML Over The Wire (HOTW)**: Instead of sending heavy JSON payloads and managing brittle client-side single-page application (SPA) state, Ztatic renders type-safe Go components using **Templ** and streams DOM mutations over HTTP using **Hotwire Turbo 8**.
-3. **Smart Layout Unwrapping**: During navigation inside `<turbo-frame>` containers, Ztatic automatically detects frame request headers (`Turbo-Frame`) and bypasses outer HTML layout rendering, reducing bandwidth consumption by up to 80%.
-4. **Real-Time Push without JS Boilerplate**: By linking Server-Sent Events (SSE) or WebSockets directly to Hotwire Turbo Streams (`<turbo-stream-from src="/sse?topic=room">`), the backend mutates client DOM elements instantly without requiring custom client-side JavaScript.
-5. **Zero-Trust Environment Configuration**: Strongly-typed struct configuration binding with 4-tier dotenv cascading (`.env` $\rightarrow$ `.env.local` $\rightarrow$ `.env.{profile}` $\rightarrow$ `.env.{profile}.local`), nested `${VAR:-default}` expansion, runtime profiles (`development`, `test`, `staging`, `production`), and opaque `SecretString` wrappers that mask sensitive values in logs and JSON.
-6. **W3C Distributed Tracing & Request Correlation**: Conforms to W3C Trace Context recommendations (`traceparent`, `tracestate`), sanitizes incoming correlation headers (`X-Request-ID`), binds trace IDs to the request context, and provides outbound HTTP transport propagation.
-7. **Type-Safe Modern Data Tier**: High-performance persistence layer featuring `data.NewDBEngine` with automatic dialect placeholder resolution (PostgreSQL `$` vs. MySQL/SQLite `?`), reflection mapping with struct tags (`db`, `ztatic:"encrypt"`), fluent Squirrel AST query helpers, nested ACID transactions with Savepoint support, and a generic `BaseRepository[T]` that natively implements standard REST and paginated operations.
-8. **Automated REST APIs & Interactive OpenAPI 3.0**: Dynamic route introspection and reflection tag parsing produce OpenAPI 3.0.3 specifications rendered interactively via **Scalar UI** at `/docs`, with recursive embedded struct property merging and automatic validation schema generation.
-9. **Standardized Responses & Domain Errors**: Canonical `Envelope[T]` contracts guarantee type safety and normalize empty slices to `[]` instead of `null`. Errors are mapped from clean architecture domain errors into RFC 9457 Problem Details with zero-trust information scrubbing in production.
-10. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) payload inspection (URIs and request bodies up to 128KB with 413 oversized rejection), multiline XSS protection, targeted HTML event-handler blocking, resilient URL unescaping, SQL comment normalization, per-request nonce-based Content Security Policy (`fullstack.Nonce(c)`), HSTS, hardened CSRF (`HttpOnly` with automatic `/api/` and `/docs` skipping), Argon2id password hashing, and AES-256-GCM database field encryption (`ztatic:"encrypt"`).
+1. **Zero Node.js Overhead**: Native Go bindings run `esbuild` directly in memory to transpile TypeScript, bundle JavaScript, and compile CSS in under 10 milliseconds without requiring npm or Node.js runtimes.
+2. **HTML Over The Wire (HOTW)**: Instead of sending heavy JSON payloads and managing complex client-side state, Ztatic renders type-safe Go components using **Templ** and streams DOM mutations over HTTP using **Hotwire Turbo 8**.
+3. **Smart Layout Unwrapping**: Inside `<turbo-frame>` containers, Ztatic automatically detects frame request headers (`Turbo-Frame`) and bypasses outer HTML layout rendering, saving bandwidth and improving responsiveness.
+4. **Real-Time Push without JS Boilerplate**: By linking Server-Sent Events (SSE) or WebSockets directly to Hotwire Turbo Streams (`<turbo-stream-from src="/sse?topic=room">`), the backend mutates client DOM elements instantly without custom frontend JavaScript.
+5. **Type-Safe Configuration**: Strongly-typed struct configuration with 4-tier dotenv cascading (`.env` $\rightarrow$ `.env.local` $\rightarrow$ `.env.{profile}` $\rightarrow$ `.env.{profile}.local`), nested variable expansion, and `SecretString` to prevent accidental credential leakage in logs.
+6. **W3C Distributed Tracing & Request Correlation**: Conforms to W3C Trace Context specifications (`traceparent`, `tracestate`), sanitizes incoming correlation headers (`X-Request-ID`), binds trace IDs to the request context, and provides outbound HTTP transport propagation.
+7. **Modern Data Tier**: High-performance persistence featuring `data.NewDBEngine` with automatic dialect placeholder resolution (PostgreSQL `$` vs. MySQL/SQLite `?`), reflection mapping with struct tags (`db`, `ztatic:"encrypt"`), fluent Squirrel AST query helpers, nested transactions with Savepoints, and a generic `BaseRepository[T]` implementing standard REST and paginated operations.
+8. **Automated REST APIs & Interactive OpenAPI 3.0**: Dynamic route introspection and reflection tag parsing produce OpenAPI 3.0.3 specifications rendered interactively via **Scalar UI** at `/docs`, with recursive struct property merging.
+9. **Standardized Responses & Domain Errors**: Canonical `Envelope[T]` contracts guarantee type safety and normalize empty slices to `[]` instead of `null`. Clean architecture domain errors map to RFC 9457 Problem Details with safe error messages in production.
+10. **Built-in Security Defaults**: Out-of-the-box WAF payload inspection (URIs and request bodies up to 128KB), multiline XSS filtering, per-request nonce-based Content Security Policy (`fullstack.Nonce(c)`), HSTS, hardened CSRF (`HttpOnly` with automatic `/api/` and `/docs` skipping), Argon2id password hashing, and AES-256-GCM database field encryption (`ztatic:"encrypt"`).
 
 ---
 
 ## 2. Ztatic Framework Directory & Module Structure
 
-When you scaffold a Ztatic project, you work with a standard architectural layout designed for scalability, separation of concerns, and rapid maintenance.
+When you scaffold a Ztatic project, you work with a standard architectural layout designed for clarity and separation of concerns.
 
 ### Standard Scaffolding Structure (`ztatic new`)
 
@@ -121,17 +121,17 @@ mywebsite/
 
 | Module Package | Path | Responsibilities |
 | :--- | :--- | :--- |
-| **`ztatic`** | [`ztatic.go`](file:///home/opeteer/ztatic-go-framework/ztatic.go) | Central engine constructor (`NewSecure()`), exporting convenience type aliases (`Context`, `HandlerFunc`, `Map`, `Group`), top-level DX helpers (`OK`, `Created`, `Paginated`, `MustLoadConfig`), and pre-wiring the full Zero-Trust security and observability pipeline onto Echo v5. |
-| **`config`** | [`config/`](file:///home/opeteer/ztatic-go-framework/config) | Zero-trust environment configuration engine: 4-tier dotenv cascading, profile management (`development`, `test`, `staging`, `production`), struct tag binding (`env`, `envDefault`), fail-fast validation, and opaque `SecretString` / `Secret[T]` wrappers. |
+| **`ztatic`** | [`ztatic.go`](file:///home/opeteer/ztatic-go-framework/ztatic.go) | Central engine constructor (`NewSecure()`), exporting convenience type aliases (`Context`, `HandlerFunc`, `Map`, `Group`), top-level DX helpers (`OK`, `Created`, `Paginated`, `MustLoadConfig`), and pre-wiring the full security and observability pipeline onto Echo v5. |
+| **`config`** | [`config/`](file:///home/opeteer/ztatic-go-framework/config) | Configuration management: 4-tier dotenv cascading, profiles (`development`, `test`, `staging`, `production`), struct tag binding (`env`, `envDefault`), fail-fast validation, and `SecretString` / `Secret[T]` wrappers. |
 | **`trace`** | [`trace/`](file:///home/opeteer/ztatic-go-framework/trace) | W3C distributed tracing (`traceparent`, `tracestate`), URL-safe timestamped request ID generation (`GenerateRequestID`), request ID sanitization, Echo tracing middleware, context accessors, and outbound HTTP `Transport` / `Client` propagation. |
-| **`data`** | [`data/`](file:///home/opeteer/ztatic-go-framework/data) | Connection pool wrapper (`DBEngine`), reflection struct mapper (`ScanOne`, `ScanAll`, `ExtractValues`), fluent Squirrel AST query helpers, Goose embedded SQL migrations (`RunMigrations`), nested transactions with savepoints (`TransactionCtx`), and generic `BaseRepository[T]`. |
-| **`validation`** | [`validation/`](file:///home/opeteer/ztatic-go-framework/validation) | Zero-trust input sanitization engine (`sanitize` tags), built-in security rules (`strong_password`, `xss_safe`, `no_sql_injection`, `safe_path`), domain validators (`slug`, `phone`, `unique`, `exists`), custom error messages (`message` tags), and `rapid.BindAndValidate`. |
+| **`data`** | [`data/`](file:///home/opeteer/ztatic-go-framework/data) | Database pool wrapper (`DBEngine`), reflection struct mapper (`ScanOne`, `ScanAll`, `ExtractValues`), fluent Squirrel AST query helpers, Goose embedded SQL migrations (`RunMigrations`), nested transactions with savepoints (`TransactionCtx`), and generic `BaseRepository[T]`. |
+| **`validation`** | [`validation/`](file:///home/opeteer/ztatic-go-framework/validation) | Input sanitization engine (`sanitize` tags), built-in security rules (`strong_password`, `xss_safe`, `no_sql_injection`, `safe_path`), domain validators (`slug`, `phone`, `unique`, `exists`), custom error messages (`message` tags), and `rapid.BindAndValidate`. |
 | **`response`** | [`response/`](file:///home/opeteer/ztatic-go-framework/response) | Canonical type-safe envelope (`Envelope[T]`), empty slice normalization (`[]`), offset and cursor pagination, HATEOAS link generator, RFC 5988 `Link` HTTP header injection, and raw JSON escape hatches. |
-| **`errors`** | [`errors/`](file:///home/opeteer/ztatic-go-framework/errors) | Domain application errors (`errors.Error` / `ztatic.AppError`), RFC 9457 Problem Details formatting, automatic HTTP status code mapping, and zero-trust internal cause scrubbing in production environments. |
-| **`log`** | [`log/`](file:///home/opeteer/ztatic-go-framework/log) | Standard Go `log/slog` structured operational logging, dual-mode formatting (colorized terminal in development, NDJSON in production), request logging middleware with latency and status recording, dynamic log level switching, and PII masking. |
-| **`security`** | [`security/`](file:///home/opeteer/ztatic-go-framework/security) | Web security suite: deep WAF URI/body inspection, nonces-based CSP (`fullstack.Nonce(c)`), hardened Double-Submit CSRF, Argon2id hashing, AES-256-GCM field encryption, compliance audit logging (`security/audit`), JWT/AEAD tokens (`security/token`), and stateful/stateless browser sessions (`security/session`). |
+| **`errors`** | [`errors/`](file:///home/opeteer/ztatic-go-framework/errors) | Domain application errors (`errors.Error` / `ztatic.AppError`), RFC 9457 Problem Details formatting, automatic HTTP status code mapping, and safe error messages in production. |
+| **`log`** | [`log/`](file:///home/opeteer/ztatic-go-framework/log) | Standard Go `log/slog` structured logging, dual-mode formatting (colorized terminal in development, NDJSON in production), request logging middleware with latency and status recording, dynamic log level switching, and sensitive data masking. |
+| **`security`** | [`security/`](file:///home/opeteer/ztatic-go-framework/security) | Web security: WAF request inspection, nonces-based CSP (`fullstack.Nonce(c)`), hardened Double-Submit CSRF, Argon2id hashing, AES-256-GCM field encryption, activity audit logging (`security/audit`), JWT/AEAD tokens (`security/token`), and browser sessions (`security/session`). |
 | **`fullstack`** | [`fullstack/`](file:///home/opeteer/ztatic-go-framework/fullstack) | Layout rendering (`RenderLayout`), Turbo Frame detection (`IsTurboFrame`), Turbo Stream responses (`RenderTurboStream`), asset pipeline (`MountAssets`, `esbuild`), and content hashing manifest. |
-| **`realtime`** | [`realtime/`](file:///home/opeteer/ztatic-go-framework/realtime) | Pub/Sub messaging engine: local `MemoryBroker` for single instances, distributed `RedisBroker` for multi-node clusters, Server-Sent Events (`SSEHandler`), and full-duplex WebSockets (`WebSocketHandler`). |
+| **`realtime`** | [`realtime/`](file:///home/opeteer/ztatic-go-framework/realtime) | Pub/Sub messaging: local `MemoryBroker` for single instances, distributed `RedisBroker` for multi-node setups, Server-Sent Events (`SSEHandler`), and full-duplex WebSockets (`WebSocketHandler`). |
 | **`rapid`** | [`rapid/`](file:///home/opeteer/ztatic-go-framework/rapid) | Dynamic RESTful route registration (`RegisterResource`), struct validation reflection, automated OpenAPI 3.0.3 JSON schema generation, and interactive Scalar UI docs rendering at `/docs`. |
 | **`echo`** | [`echo/`](file:///home/opeteer/ztatic-go-framework/echo) | Core router with radix tree node compaction (`Remove`), fast-path query binding, and HTTPS/TLS reverse proxying (`proxyHTTP`, `proxyRaw`). |
 | **`cmd/ztatic`** | [`cmd/ztatic/`](file:///home/opeteer/ztatic-go-framework/cmd/ztatic) | Developer CLI: project scaffolding (`ztatic new`), live-reloading dev server with debounced watching (`ztatic dev`), and single-binary production compiler (`ztatic build`). |
@@ -170,7 +170,7 @@ ztatic --help
 ```
 
 > [!TIP]
-> **Air-Gapped & Corporate Environments:** In strict enterprise sandboxes or offline networks where outbound access to Go's checksum server (`sum.golang.org`) is restricted, configure Go to bypass sumdb checks:
+> **Offline / Corporate Environments:** If you develop behind strict proxies or offline networks where access to Go's checksum server (`sum.golang.org`) is restricted, configure Go to bypass sumdb checks:
 > ```bash
 > export GOSUMDB=off
 > ```
@@ -187,7 +187,7 @@ cd mywebsite
 ```
 
 ### What `ztatic new` Generates:
-1. **Directory Tree**: Standard architectural folders for assets, controllers, models, views, repositories, and migrations.
+1. **Directory Tree**: Standard folders for assets, controllers, models, views, repositories, and migrations.
 2. **Configuration Blueprint**: Pre-configured `.env` and `.env.example` files containing defaults for ports, application names, and secrets.
 3. **Type-Safe Config Model**: `internal/config/config.go` with environment struct binding.
 4. **Single-Binary Root Embed**: `dist.go` at the root package exposing `//go:embed all:dist` as `mywebsite.DistFS`.
@@ -196,13 +196,13 @@ cd mywebsite
 
 ---
 
-## Step 3: Zero-Trust Environment Configuration (`config`)
+## Step 3: Configuration & Environment Management (`config`)
 
-Enterprise web applications must never hardcode configuration values or leak credentials. Ztatic provides a zero-trust configuration engine built into `ztatic-go-framework/config`.
+Applications should never hardcode configuration values or leak credentials. Ztatic provides a clean configuration engine built into `ztatic-go-framework/config`.
 
 ### 1. Define the Configuration Schema (`internal/config/config.go`)
 
-Open `internal/config/config.go` and define your strongly-typed configuration struct:
+Open `internal/config/config.go` and define your configuration struct:
 
 ```go
 package config
@@ -233,17 +233,17 @@ ZTATIC_CIPHER_KEY=01234567890123456789012345678901
 AUTH_SECRET=dev-secret-key-must-be-changed-in-production-min-32-bytes
 ```
 
-### 3. Understanding Zero-Trust Configuration Features
+### 3. How Configuration Works in Ztatic
 
 - **Dotenv Cascading**: Loads configuration in cascading order:
   $$\text{.env} \longrightarrow \text{.env.local} \longrightarrow \text{.env.\{profile\}} \longrightarrow \text{.env.\{profile\}.local}$$
   Process `os.Environ()` variables always take final precedence.
 - **Nested Variable Expansion**: Supports shell syntax such as `${DATABASE_PATH:-data/app.db}`.
-- **Opaque `SecretString` & `Secret[T]`**:
+- **Safe `SecretString` & `Secret[T]`**:
   - Automatically serializes as `"[REDACTED]"` when printed via `fmt.Printf`, logged with `slog`, or serialized to JSON.
   - Access the raw plaintext only when intentionally passing to database drivers or crypto modules using `secret.Expose()` or `secret.Value()`.
-  - Securely wipe secrets from heap memory when discarded using `secret.Destroy()`.
-  - Seamlessly resolve Docker/Kubernetes volume secrets via `file:///run/secrets/api_key` or AES-GCM encrypted secrets via `enc:aes-gcm:<ciphertext>`.
+  - Securely wipe secrets from memory when discarded using `secret.Destroy()`.
+  - Supports Docker/Kubernetes volume secrets via `file:///run/secrets/api_key` or encrypted values via `enc:aes-gcm:<ciphertext>`.
 - **Profiles**: Automatically detected via `ZTATIC_ENV`, `APP_ENV`, or `GO_ENV` (`development`, `test`, `staging`, `production`).
 - **Fail-Fast Validation**: Loading configuration via `ztatic.MustLoadConfig[AppConfig]()` validates every struct tag at startup, refusing to boot if mandatory variables are missing.
 
@@ -273,7 +273,7 @@ type Article struct {
 ```
 
 > [!TIP]
-> **Field-Level AES-256-GCM Encryption:** Fields tagged with `ztatic:"encrypt"` (such as `SecretNotes`) are automatically encrypted before writing to the database and decrypted upon scanning by `BaseRepository[T]`. This uses the 32-byte key set via `app.SetCipherKey(...)` or the `ZTATIC_CIPHER_KEY` environment variable.
+> **Field-Level Encryption:** Fields tagged with `ztatic:"encrypt"` (such as `SecretNotes`) are automatically encrypted before writing to the database and decrypted upon scanning by `BaseRepository[T]`. This uses the 32-byte key set via `app.SetCipherKey(...)` or the `ZTATIC_CIPHER_KEY` environment variable.
 
 ### 2. Embedded SQL Migrations (`db/migrations/00001_create_articles_table.sql`)
 
@@ -352,7 +352,7 @@ func (r *ArticleRepository) Search(ctx context.Context, term string) ([]models.A
 
 Ztatic's `BaseRepository[T]` eliminates boilerplate data access code. It out-of-the-box implements:
 
-- **Full REST & Pagination Contracts**: Fully implements `rapid.Resource[T]` (`FindAll`, `FindByID`, `Create`, `Update`, `Delete`) and `rapid.PaginatedResource[T]` (`FindAllPaginated`).
+- **Full REST & Pagination Contracts**: Implements `rapid.Resource[T]` (`FindAll`, `FindByID`, `Create`, `Update`, `Delete`) and `rapid.PaginatedResource[T]` (`FindAllPaginated`).
 - **CRUD Operations**:
   - `r.GetByID(ctx, id)`: Fetches a single record by primary key with automatic struct mapping and field decryption.
   - `r.Find(ctx, opts...)`: Fetches records using fluent query options (`WhereEq`, `WhereIn`, `WhereBetween`, `OrderByDesc`, `Limit`, etc.).
@@ -363,8 +363,8 @@ Ztatic's `BaseRepository[T]` eliminates boilerplate data access code. It out-of-
   - `r.Save(ctx, entity)`: Updates a record identified by its primary key.
   - `r.UpdateColumns(ctx, id, valuesMap)`: Updates specific columns without re-writing the full entity.
   - `r.DeleteByID(ctx, id)` / `r.DeleteWhere(ctx, pred, args...)`: Deletes matching records.
-  - `r.Count(ctx, opts...)` / `r.Exists(ctx, opts...)`: Efficient aggregation checks.
-- **Ambient ACID Transactions & Savepoints**:
+  - `r.Count(ctx, opts...)` / `r.Exists(ctx, opts...)`: Efficient count and existence checks.
+- **Transactions & Savepoints**:
   ```go
   err := dbEngine.TransactionCtx(ctx, func(txCtx context.Context) error {
       // Any repository method passed txCtx automatically participates in the transaction!
@@ -374,7 +374,7 @@ Ztatic's `BaseRepository[T]` eliminates boilerplate data access code. It out-of-
       return repo.Insert(txCtx, &article2) // Automatic commit
   })
   ```
-  If `TransactionCtx` is invoked when an ambient transaction already exists on `ctx`, Ztatic automatically creates an internal SQL **Savepoint** (`SAVEPOINT sp_ztatic_N`) for safe nested transactions!
+  If `TransactionCtx` is invoked when a transaction already exists on `ctx`, Ztatic automatically creates an internal SQL **Savepoint** (`SAVEPOINT sp_ztatic_N`) for safe nested transactions.
 
 > [!TIP]
 > When using SQLite with Go `database/sql`, import a pure-Go driver in your application entrypoint:
@@ -434,7 +434,7 @@ templ AppLayout(content templ.Component) {
 ```
 
 > [!NOTE]
-> **Smart Layout Unwrapping:** When a user navigates between `<turbo-frame>` containers, `fullstack.RenderLayout` automatically inspects the `Turbo-Frame` request header and strips the outer layout shell, transmitting only the inner component over the wire.
+> **Smart Layout Unwrapping:** When navigating inside `<turbo-frame>` containers, `fullstack.RenderLayout` automatically inspects the `Turbo-Frame` request header and strips the outer layout shell, transmitting only the inner component over the wire.
 
 ### 2. Article Components & Alpine.js Modal (`internal/views/components/article_card.templ`)
 
@@ -471,7 +471,7 @@ templ CreateArticleModal() {
 					<input type="text" name="title" placeholder="Title" required class="w-full mb-3 p-2 border rounded"/>
 					<textarea name="content" placeholder="Content" required class="w-full mb-3 p-2 border rounded"></textarea>
 					<input type="text" name="author" placeholder="Author Name" class="w-full mb-3 p-2 border rounded"/>
-					<input type="text" name="secret_notes" placeholder="Confidential Notes (Encrypted at Rest)" class="w-full mb-3 p-2 border rounded"/>
+					<input type="text" name="secret_notes" placeholder="Private Notes (Encrypted at Rest)" class="w-full mb-3 p-2 border rounded"/>
 					<div class="flex justify-end space-x-2">
 						<button type="button" @click="open = false" class="px-4 py-2 border rounded">Cancel</button>
 						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
@@ -505,7 +505,7 @@ templ ArticleList(articles []models.Article) {
 
 ## Step 6: Implementing Rapid REST APIs, Input Sanitization & OpenAPI Docs
 
-Ztatic bridges high-speed HOTW frontend rendering with enterprise-grade REST APIs.
+Ztatic makes building REST APIs and generating documentation straightforward.
 
 ### 1. Mounting REST Endpoints (`rapid.RegisterResource`)
 
@@ -526,7 +526,7 @@ rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
 
 ### 2. Standardized Response Envelopes & Pagination
 
-All REST endpoints registered through `rapid` automatically output canonical response envelopes:
+REST endpoints registered through `rapid` automatically output clean response envelopes:
 
 ```json
 {
@@ -572,7 +572,7 @@ For custom endpoints, use Ztatic's top-level DX helpers:
 
 ### 3. Interactive Scalar API Documentation
 
-Navigate to `http://localhost:8080/docs` in your browser. The Scalar documentation UI dynamically generates interactive documentation directly from your Go struct tags (`json`, `validate`, `db`) with live "Try It" capabilities and zero manual YAML maintenance!
+Navigate to `http://localhost:8080/docs` in your browser. The Scalar documentation UI dynamically generates interactive documentation directly from your Go struct tags (`json`, `validate`, `db`) with live "Try It" capabilities and zero manual YAML maintenance.
 
 ---
 
@@ -582,8 +582,8 @@ Ztatic natively pushes DOM mutations over Server-Sent Events (SSE) and WebSocket
 
 ### 1. Choosing an Event Broker (`MemoryBroker` vs. `RedisBroker`)
 
-- **`MemoryBroker`**: Thread-safe in-memory broker ideal for single-instance deployments (`realtime.NewMemoryBroker()`).
-- **`RedisBroker`**: Distributed broker for multi-instance clusters (`realtime.NewRedisBroker(redisClient)` using `go-redis/v9`).
+- **`MemoryBroker`**: In-memory broker ideal for single-instance setups (`realtime.NewMemoryBroker()`).
+- **`RedisBroker`**: Distributed broker for multi-node clusters (`realtime.NewRedisBroker(redisClient)` using `go-redis/v9`).
 
 ### 2. Creating the Article Controller (`internal/controllers/article_controller.go`)
 
@@ -623,7 +623,7 @@ func (ac *ArticleController) Create(c *ztatic.Context) error {
 		newArticle.Author = "Anonymous"
 	}
 
-	// 1. Validate payload with Zero-Trust rules
+	// 1. Validate payload with struct rules
 	if err := ztatic.Validate(newArticle); err != nil {
 		return err // Automatically mapped to HTTP 422 with field details
 	}
@@ -634,7 +634,7 @@ func (ac *ArticleController) Create(c *ztatic.Context) error {
 		return ztatic.ErrInternal("Failed to save article").WithInternal(err)
 	}
 
-	// 3. Record compliance audit entry
+	// 3. Record activity audit entry
 	if entry := ztatic.AuditFromContext(c); entry != nil {
 		entry.WithTarget("article", fmt.Sprint(newArticle.ID), newArticle.Title).
 			WithCategory(audit.CategoryData)
@@ -663,7 +663,7 @@ func (ac *ArticleController) Create(c *ztatic.Context) error {
 
 ---
 
-## Step 8: Zero-Trust Observability (W3C Tracing, Structured Logging & Audit Trail)
+## Step 8: Observability: Tracing, Logging & Activity Ledger
 
 Ztatic provides end-to-end request visibility out of the box with zero external dependencies.
 
@@ -672,7 +672,7 @@ Ztatic provides end-to-end request visibility out of the box with zero external 
 - Every request automatically receives a timestamped, URL-safe Request ID (`req-...`) and a 16-byte W3C Trace ID.
 - The `trace` middleware enforces W3C recommendations:
   - Parses incoming `traceparent` headers (`00-<trace_id>-<span_id>-<flags>`) and `tracestate`.
-  - Sanitizes untrusted user-supplied `X-Request-ID` headers to prevent CRLF injection and memory bloat.
+  - Sanitizes untrusted user-supplied `X-Request-ID` headers to prevent header injection.
   - Automatically injects `X-Request-ID` and `traceparent` into HTTP response headers.
 - **Context Accessors**:
   ```go
@@ -681,7 +681,7 @@ Ztatic provides end-to-end request visibility out of the box with zero external 
   spanID  := ztatic.SpanIDFromContext(c)
   tc      := ztatic.TraceFromContext(c)
   ```
-- **Outbound HTTP Calls**: Propagate trace context to downstream microservices using the tracing HTTP client:
+- **Outbound HTTP Calls**: Propagate trace context to downstream services using the tracing HTTP client:
   ```go
   client := trace.NewClient(nil) // Wraps http.DefaultClient with tracing RoundTripper
   req, _ := http.NewRequestWithContext(c.Request().Context(), "GET", "https://api.internal/data", nil)
@@ -690,24 +690,23 @@ Ztatic provides end-to-end request visibility out of the box with zero external 
 
 ### 2. Structured Operational Logging (`log`)
 
-- Pre-configured on standard library `log/slog`.
-- Dual-mode output: formatted color terminal output during development (`APP_ENV=development`), and high-performance NDJSON in production for Datadog, Loki, or Splunk ingestion.
+- Built on standard library `log/slog`.
+- Dual-mode output: formatted color terminal output during development (`APP_ENV=development`), and structured NDJSON in production for log aggregators (Datadog, Loki, Splunk).
 - Requests automatically log latency, method, path, IP, and status with level mapping (2xx/3xx $\rightarrow$ `INFO`, 4xx $\rightarrow$ `WARN`, 5xx $\rightarrow$ `ERROR`).
 - Enriched request logger:
   ```go
   logger := ztatic.LogFromContext(c)
   logger.Info("processing order", "order_id", 123)
   ```
-- Sensitive attributes (passwords, tokens, keys) are automatically scrubbed via `security/privacy.LogMasker`.
+- Sensitive attributes (passwords, tokens, keys) are automatically masked as `[REDACTED]`.
 - Dynamically adjust log levels at runtime without restarting:
   ```go
   app.SetLogLevel(log.LevelDebug)
   ```
 
-### 3. Compliance Audit Logging (`security/audit`)
+### 3. Activity & Audit Logging (`security/audit`)
 
 - Automatically audits state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) and error responses (`status >= 400`).
-- Complies with SOC 2, HIPAA, and ISO 27001 standards.
 - Enrich audit events inside your handlers using `ztatic.AuditFromContext(c)` or `ztatic.AuditRecord(c, ...)`:
   ```go
   if entry := ztatic.AuditFromContext(c); entry != nil {
@@ -724,7 +723,7 @@ Ztatic provides end-to-end request visibility out of the box with zero external 
   return ztatic.ErrNotFound("Article does not exist").WithMetadata("article_id", id)
   ```
 - Standard error responses conform to RFC 9457 Problem Details (`application/problem+json`).
-- In production (`APP_ENV=production`), 5xx database internals and stack traces are scrubbed and replaced with safe reference messages.
+- In production (`APP_ENV=production`), internal database errors and stack traces are hidden from users while preserving request correlation IDs.
 
 ---
 
@@ -783,10 +782,10 @@ import (
 )
 
 func main() {
-	// 1. Fail-fast configuration loading with startup validation
+	// 1. Load configuration with startup validation
 	cfg := ztatic.MustLoadConfig[config.AppConfig]()
 
-	// 2. Initialize Zero-Trust security engine
+	// 2. Initialize security-hardened engine
 	app := ztatic.NewSecure()
 
 	// Configure field-level AES-256 encryption key
@@ -897,14 +896,14 @@ APP_ENV=production PORT=80 /opt/mywebsite/server
 
 - [x] Installed `ztatic` CLI and verified environment.
 - [x] Scaffolded project with `ztatic new mywebsite`.
-- [x] Mastered the 13 core framework packages (`ztatic`, `config`, `trace`, `data`, `rapid`, `validation`, `response`, `errors`, `log`, `security`, `fullstack`, `realtime`, `echo`).
-- [x] Built type-safe environment configuration with 4-tier dotenv cascading and `SecretString`.
-- [x] Set up database connection pool with `data.NewDBEngine`, embedded Goose SQL migrations, and AES-256 field encryption.
+- [x] Learned the 13 core framework packages (`ztatic`, `config`, `trace`, `data`, `rapid`, `validation`, `response`, `errors`, `log`, `security`, `fullstack`, `realtime`, `echo`).
+- [x] Set up type-safe environment configuration with 4-tier dotenv cascading and `SecretString`.
+- [x] Initialized database connection pool with `data.NewDBEngine`, embedded Goose SQL migrations, and AES-256 field encryption.
 - [x] Implemented data access using `data.BaseRepository[T]`, fluent query helpers, and nested transactions with savepoints.
 - [x] Created type-safe Templ views with smart layout unwrapping and Alpine.js micro-interactions.
 - [x] Auto-generated OpenAPI 3.0 documentation and Scalar UI at `/docs`.
 - [x] Added real-time DOM mutations via SSE and Turbo Streams without client JavaScript.
-- [x] Leveraged W3C distributed tracing, structured logging, and compliance audit ledgers.
+- [x] Leveraged W3C distributed tracing, structured logging, and activity ledgers.
 - [x] Built and deployed a single, self-contained static binary with `ztatic build`.
 
-Congratulations! You have mastered the full Ztatic framework ecosystem and are ready to build enterprise-grade web applications in Go!
+Congratulations! You have mastered the Ztatic framework ecosystem and are ready to build modern, high-performance web applications in Go!
