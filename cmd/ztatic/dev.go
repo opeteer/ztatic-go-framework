@@ -157,7 +157,9 @@ func (s *DevServer) watchLoop() {
 
 			if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
 				ext := filepath.Ext(event.Name)
-				if ext == ".go" || ext == ".templ" || ext == ".css" || ext == ".js" || ext == ".ts" {
+				base := filepath.Base(event.Name)
+				isEnv := strings.HasPrefix(base, ".env")
+				if ext == ".go" || ext == ".templ" || ext == ".css" || ext == ".js" || ext == ".ts" || isEnv {
 					s.debouncer.Run(func() {
 						s.triggerRebuild(event.Name)
 					})
@@ -214,8 +216,9 @@ func (s *DevServer) triggerRebuild(triggerFile string) {
 		}
 	}
 
-	// For .go files or initial run, restart the server
-	if ext == ".go" || triggerFile == "init" {
+	// For .go files, .env files, or initial run, restart the server
+	isEnvFile := strings.HasPrefix(filepath.Base(triggerFile), ".env")
+	if ext == ".go" || isEnvFile || triggerFile == "init" {
 		s.restartServerProcess()
 	}
 
@@ -277,7 +280,7 @@ func (s *DevServer) restartServerProcess() {
 	s.cmd = exec.Command("tmp/dev-server")
 	s.cmd.Stdout = os.Stdout
 	s.cmd.Stderr = os.Stderr
-	s.cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.Port), "APP_ENV=development")
+	s.cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", s.Port), "APP_ENV=development", "ZTATIC_ENV=development")
 	
 	if err := s.cmd.Start(); err != nil {
 		fmt.Printf("❌ Failed to start server: %v\n", err)

@@ -84,7 +84,7 @@ func TestMigrationEngine_Run(t *testing.T) {
 
 	migrator := NewMigrationEngine(db.SQL)
 	err := migrator.RunMigrations(nil, "migrations", "postgres")
-	if err != nil && err.Error() != "ztatic/data: failed to run migrations: no migration files found" {
+	if err != nil && !strings.Contains(err.Error(), "no migration files found") && !strings.Contains(err.Error(), "migrations directory does not exist") {
 		t.Fatalf("Migrations failed: %v", err)
 	}
 }

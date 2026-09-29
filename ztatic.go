@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/redis/go-redis/v9"
 
+	"ztatic-go-framework/config"
 	"ztatic-go-framework/errors"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
@@ -131,6 +132,21 @@ type Context = echo.Context
 type HandlerFunc = echo.HandlerFunc
 type Map map[string]any
 type Group = echo.Group
+
+// Environment & Configuration DX Aliases
+type Profile = config.Profile
+type SecretString = config.SecretString
+type Secret[T any] = config.Secret[T]
+type ConfigValidationError = config.ConfigValidationError
+type ConfigViolation = config.ConfigViolation
+type ConfigOption = config.Option
+
+const (
+	ProfileDevelopment = config.ProfileDevelopment
+	ProfileTest        = config.ProfileTest
+	ProfileStaging     = config.ProfileStaging
+	ProfileProduction  = config.ProfileProduction
+)
 
 type AuditEntry = audit.Entry
 type AuditLogger = audit.Logger
@@ -270,6 +286,33 @@ func ExtractPagination(c *Context, opts ...response.PaginationOption) response.P
 
 func ExtractCursor(c *Context, opts ...response.CursorOption) response.CursorParams {
 	return response.ExtractCursor(c, opts...)
+}
+
+// Environment & Configuration Helpers
+
+// LoadConfig loads, decodes, and validates environment configuration into T.
+func LoadConfig[T any](opts ...config.Option) (*T, error) {
+	return config.Load[T](opts...)
+}
+
+// MustLoadConfig loads and validates environment configuration into T, panicking on validation failure.
+func MustLoadConfig[T any](opts ...config.Option) *T {
+	return config.MustLoad[T](opts...)
+}
+
+// ActiveProfile returns the active application runtime profile.
+func ActiveProfile() config.Profile {
+	return config.ActiveProfile()
+}
+
+// SetProfile explicitly sets the active application runtime profile.
+func SetProfile(p config.Profile) {
+	config.SetProfile(p)
+}
+
+// NewSecretString initializes an opaque SecretString wrapper.
+func NewSecretString(val string) config.SecretString {
+	return config.NewSecretString(val)
 }
 
 // AuditFromContext retrieves the active audit entry from the request context.
