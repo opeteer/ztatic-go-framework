@@ -1,0 +1,38 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+ztatic
+server
+
+# Test binary, output, and coverage
+*.test
+*.out
+coverage.html
+profile.out
+
+# Temporary directories and scaffold test apps
+tmp/
+myapp/
+mytestapp/
+testapp/
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Frontend build artifacts
+dist/
+node_modules/
