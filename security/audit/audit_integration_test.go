@@ -13,7 +13,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -27,9 +26,9 @@ import (
 // 1. DATA MODEL & ENTRY INTEGRITY TESTS
 // -----------------------------------------------------------------------------
 
-// TestQA_ID_Uniqueness_CollisionCheck verifies that 10,000 IDs generated across
+// TestAuditIntegration_ID_Uniqueness_CollisionCheck verifies that 10,000 IDs generated across
 // concurrent threads are 100% unique without collisions.
-func TestQA_ID_Uniqueness_CollisionCheck(t *testing.T) {
+func TestAuditIntegration_ID_Uniqueness_CollisionCheck(t *testing.T) {
 	const count = 10000
 	idMap := sync.Map{}
 	var collisions int64
@@ -49,14 +48,13 @@ func TestQA_ID_Uniqueness_CollisionCheck(t *testing.T) {
 	wg.Wait()
 
 	if collisions > 0 {
-		t.Fatalf("[QA DEFECT] ID collision detected! Collisions: %d out of %d", collisions, count)
+		t.Fatalf("ID collision detected! Collisions: %d out of %d", collisions, count)
 	}
-	t.Logf("[QA VERIFIED] 10,000 audit IDs generated concurrently with 0 collisions.")
 }
 
-// TestQA_DataSanitization_DeepScrubbing validates that all sensitive patterns
+// TestAuditIntegration_DataSanitization_DeepScrubbing validates that all sensitive patterns
 // (casing variations, nested dictionaries, slices of maps) are scrubbed.
-func TestQA_DataSanitization_DeepScrubbing(t *testing.T) {
+func TestAuditIntegration_DataSanitization_DeepScrubbing(t *testing.T) {
 	entry := audit.NewEntry("user.security.update").
 		WithActor("usr_99", "user", "Admin", "admin").
 		WithTarget("account", "acc_100", "Production Account")
@@ -94,49 +92,47 @@ func TestQA_DataSanitization_DeepScrubbing(t *testing.T) {
 	sensitiveKeys := []string{"PASSWORD", "api_KEY", "SSN", "credit_card", "CVV", "auth_token"}
 	for _, key := range sensitiveKeys {
 		if sanitized.Metadata[key] != privacy.RedactedString {
-			t.Errorf("[QA DEFECT] Key %s was not redacted: got %v", key, sanitized.Metadata[key])
+			t.Errorf("Key %s was not redacted: got %v", key, sanitized.Metadata[key])
 		}
 	}
 
 	if sanitized.Metadata["safe_key"] != "safe_value" {
-		t.Errorf("[QA DEFECT] Non-sensitive key 'safe_key' was corrupted: got %v", sanitized.Metadata["safe_key"])
+		t.Errorf("Non-sensitive key 'safe_key' was corrupted: got %v", sanitized.Metadata["safe_key"])
 	}
 
 	nested, ok := sanitized.Metadata["nested_profile"].(map[string]any)
 	if !ok || nested["pass"] != privacy.RedactedString || nested["user_name"] != "bob_ross" {
-		t.Errorf("[QA DEFECT] Nested profile map sanitization failed: %+v", nested)
+		t.Errorf("Nested profile map sanitization failed: %+v", nested)
 	}
 
 	history, ok := sanitized.Metadata["history"].([]any)
 	if !ok || len(history) != 3 {
-		t.Fatalf("[QA DEFECT] History slice corrupted: %+v", history)
+		t.Fatalf("History slice corrupted: %+v", history)
 	}
 	h1, ok := history[0].(map[string]any)
 	if !ok || h1["secret"] != privacy.RedactedString {
-		t.Errorf("[QA DEFECT] Slice item 0 not redacted: %+v", h1)
+		t.Errorf("Slice item 0 not redacted: %+v", h1)
 	}
 
 	// Assert Changes diff sanitization
 	if sanitized.Changes.Before["auth"] != privacy.RedactedString || sanitized.Changes.After["auth"] != privacy.RedactedString {
-		t.Errorf("[QA DEFECT] Changes before/after not redacted: %+v", sanitized.Changes)
+		t.Errorf("Changes before/after not redacted: %+v", sanitized.Changes)
 	}
 	if sanitized.Changes.Diff[0].Old != privacy.RedactedString || sanitized.Changes.Diff[0].New != privacy.RedactedString {
-		t.Errorf("[QA DEFECT] Changes diff not redacted: %+v", sanitized.Changes.Diff[0])
+		t.Errorf("Changes diff not redacted: %+v", sanitized.Changes.Diff[0])
 	}
 	if sanitized.Changes.Diff[1].Old != "inactive" || sanitized.Changes.Diff[1].New != "active" {
-		t.Errorf("[QA DEFECT] Non-sensitive diff corrupted: %+v", sanitized.Changes.Diff[1])
+		t.Errorf("Non-sensitive diff corrupted: %+v", sanitized.Changes.Diff[1])
 	}
-
-	t.Log("[QA VERIFIED] Deep data sanitization scrubs all sensitive patterns across all structures.")
 }
 
 // -----------------------------------------------------------------------------
 // 2. FORMATTERS COMPLIANCE & SIEM ESCAPING TESTS
 // -----------------------------------------------------------------------------
 
-// TestQA_Formatters_CloudEventsStrictCompliance validates that CloudEvents output
+// TestAuditIntegration_Formatters_CloudEventsStrictCompliance validates that CloudEvents output
 // conforms to CloudEvents v1.0.2 specification.
-func TestQA_Formatters_CloudEventsStrictCompliance(t *testing.T) {
+func TestAuditIntegration_Formatters_CloudEventsStrictCompliance(t *testing.T) {
 	entry := audit.NewEntry("billing.invoice.void").
 		WithActor("usr_finance", "user", "Jane Doe", "billing_manager").
 		WithTarget("invoice", "inv_888", "Annual Invoice").
@@ -146,72 +142,68 @@ func TestQA_Formatters_CloudEventsStrictCompliance(t *testing.T) {
 	formatter := audit.NewCloudEventsFormatter("ztatic/test-suite")
 	payload, err := formatter.Format(entry)
 	if err != nil {
-		t.Fatalf("[QA DEFECT] CloudEvents format failed: %v", err)
+		t.Fatalf("CloudEvents format failed: %v", err)
 	}
 
 	var parsed map[string]any
 	if err := json.Unmarshal(payload, &parsed); err != nil {
-		t.Fatalf("[QA DEFECT] Invalid JSON generated by CloudEventsFormatter: %v", err)
+		t.Fatalf("Invalid JSON generated by CloudEventsFormatter: %v", err)
 	}
 
 	// Check CloudEvents v1.0 required fields
 	if parsed["specversion"] != "1.0" {
-		t.Errorf("[QA DEFECT] CloudEvents specversion != 1.0: %v", parsed["specversion"])
+		t.Errorf("CloudEvents specversion != 1.0: %v", parsed["specversion"])
 	}
 	if parsed["id"] != entry.ID {
-		t.Errorf("[QA DEFECT] CloudEvents id mismatch: %v", parsed["id"])
+		t.Errorf("CloudEvents id mismatch: %v", parsed["id"])
 	}
 	if parsed["source"] != "ztatic/test-suite" {
-		t.Errorf("[QA DEFECT] CloudEvents source mismatch: %v", parsed["source"])
+		t.Errorf("CloudEvents source mismatch: %v", parsed["source"])
 	}
 	if parsed["type"] != "org.ztatic.audit.billing.invoice.void" {
-		t.Errorf("[QA DEFECT] CloudEvents type mismatch: %v", parsed["type"])
+		t.Errorf("CloudEvents type mismatch: %v", parsed["type"])
 	}
 	if parsed["datacontenttype"] != "application/json" {
-		t.Errorf("[QA DEFECT] CloudEvents datacontenttype mismatch: %v", parsed["datacontenttype"])
+		t.Errorf("CloudEvents datacontenttype mismatch: %v", parsed["datacontenttype"])
 	}
 	if parsed["data"] == nil {
-		t.Errorf("[QA DEFECT] CloudEvents data payload is nil")
+		t.Errorf("CloudEvents data payload is nil")
 	}
-
-	t.Log("[QA VERIFIED] CloudEventsFormatter complies strictly with CNCF CloudEvents v1.0.2 spec.")
 }
 
-// TestQA_Formatters_CEF_DelimiterEscaping validates that malicious delimiters
+// TestAuditIntegration_Formatters_CEF_DelimiterEscaping validates that malicious delimiters
 // (|, =, \, \n) in action, target, or outcome are escaped to prevent SIEM log injection.
-func TestQA_Formatters_CEF_DelimiterEscaping(t *testing.T) {
+func TestAuditIntegration_Formatters_CEF_DelimiterEscaping(t *testing.T) {
 	entry := audit.NewEntry("auth.login|bypass=true").
 		WithActor("hacker|admin=true", "user", "Evil", "root").
 		WithTarget("account|id=99", "acc_1=bad", "Special Account").
 		WithOutcome(audit.OutcomeDenied, 403, "Reason with | pipe and = equal sign\nnewline")
 
 	formatter := audit.NewCEFFormatter("Ztatic", "SecEngine", "1.0")
-	bytes, err := formatter.Format(entry)
+	rawBytes, err := formatter.Format(entry)
 	if err != nil {
-		t.Fatalf("[QA DEFECT] CEF format failed: %v", err)
+		t.Fatalf("CEF format failed: %v", err)
 	}
 
-	line := string(bytes)
+	line := string(rawBytes)
 	lines := strings.Split(strings.TrimSpace(line), "\n")
 	if len(lines) != 1 {
-		t.Errorf("[QA DEFECT] Unescaped newline caused multi-line injection in CEF log: %d lines", len(lines))
+		t.Errorf("Unescaped newline caused multi-line injection in CEF log: %d lines", len(lines))
 	}
 
 	// Verify header parts are intact using CEF unescaped delimiter splitting
 	parts := splitCEFHeader(line)
 	// Header format: CEF:0|Device Vendor|Device Product|Device Version|Device Event Class ID|Name|Severity|Extension
 	if len(parts) < 8 {
-		t.Fatalf("[QA DEFECT] Malformed CEF header structure: %+v", parts)
+		t.Fatalf("Malformed CEF header structure: %+v", parts)
 	}
 
 	if parts[0] != "CEF:0" {
-		t.Errorf("[QA DEFECT] Invalid CEF prefix: %s", parts[0])
+		t.Errorf("Invalid CEF prefix: %s", parts[0])
 	}
 	if parts[6] != "4" { // WARN severity maps to 4
-		t.Errorf("[QA DEFECT] Expected CEF severity 4 for OutcomeDenied, got %s", parts[6])
+		t.Errorf("Expected CEF severity 4 for OutcomeDenied, got %s", parts[6])
 	}
-
-	t.Log("[QA VERIFIED] CEFFormatter escapes delimiters preventing log injection into SIEM collectors.")
 }
 
 func splitCEFHeader(line string) []string {
@@ -243,9 +235,9 @@ func splitCEFHeader(line string) []string {
 // 3. SINK RELIABILITY & RESILIENCE TESTS
 // -----------------------------------------------------------------------------
 
-// TestQA_MemorySink_BoundedCapacity validates that MemorySink strictly bounds
+// TestAuditIntegration_MemorySink_BoundedCapacity validates that MemorySink strictly bounds
 // memory usage and preserves only the newest N items without data race.
-func TestQA_MemorySink_BoundedCapacity(t *testing.T) {
+func TestAuditIntegration_MemorySink_BoundedCapacity(t *testing.T) {
 	const capacity = 50
 	const totalWrites = 500
 	mem := audit.NewMemorySink(capacity)
@@ -277,18 +269,16 @@ func TestQA_MemorySink_BoundedCapacity(t *testing.T) {
 	wg.Wait()
 
 	if mem.Len() != capacity {
-		t.Errorf("[QA DEFECT] MemorySink did not enforce capacity bound: expected %d, got %d", capacity, mem.Len())
+		t.Errorf("MemorySink did not enforce capacity bound: expected %d, got %d", capacity, mem.Len())
 	}
 	if len(mem.Entries()) != capacity {
-		t.Errorf("[QA DEFECT] MemorySink Entries() length != capacity: got %d", len(mem.Entries()))
+		t.Errorf("MemorySink Entries() length != capacity: got %d", len(mem.Entries()))
 	}
-
-	t.Log("[QA VERIFIED] MemorySink bounded capacity strictly maintained under high concurrency.")
 }
 
-// TestQA_MultiSink_PartialFailureTolerance verifies that if one downstream sink
+// TestAuditIntegration_MultiSink_PartialFailureTolerance verifies that if one downstream sink
 // fails, remaining sinks still receive the audit payload, and errors are joined.
-func TestQA_MultiSink_PartialFailureTolerance(t *testing.T) {
+func TestAuditIntegration_MultiSink_PartialFailureTolerance(t *testing.T) {
 	mem1 := audit.NewMemorySink(10)
 	mem2 := audit.NewMemorySink(10)
 	failingSink := &mockFailingSink{err: errors.New("network destination unreachable")}
@@ -300,18 +290,16 @@ func TestQA_MultiSink_PartialFailureTolerance(t *testing.T) {
 
 	err := multi.Write(context.Background(), payload, entry)
 	if err == nil {
-		t.Errorf("[QA DEFECT] MultiSink did not report error when child sink failed")
+		t.Errorf("MultiSink did not report error when child sink failed")
 	}
 	if !strings.Contains(err.Error(), "network destination unreachable") {
-		t.Errorf("[QA DEFECT] Expected joined error containing child failure, got: %v", err)
+		t.Errorf("Expected joined error containing child failure, got: %v", err)
 	}
 
 	// Sinks mem1 and mem2 MUST still have received the entry
 	if mem1.Len() != 1 || mem2.Len() != 1 {
-		t.Errorf("[QA DEFECT] Surviving sinks did not receive write! mem1: %d, mem2: %d", mem1.Len(), mem2.Len())
+		t.Errorf("Surviving sinks did not receive write! mem1: %d, mem2: %d", mem1.Len(), mem2.Len())
 	}
-
-	t.Log("[QA VERIFIED] MultiSink preserves delivery to surviving sinks upon partial child sink failure.")
 }
 
 type mockFailingSink struct {
@@ -328,9 +316,9 @@ func (s *mockFailingSink) Close() error                    { return s.err }
 // 4. LOGGER HIGH-THROUGHPUT CONCURRENCY & DRAIN STRESS TESTS
 // -----------------------------------------------------------------------------
 
-// TestQA_AsyncLogger_HighThroughputStress verifies that AsyncLogger can process
+// TestAuditIntegration_AsyncLogger_HighThroughputStress verifies that AsyncLogger can process
 // 5,000 events across 25 concurrent goroutines without dropping events or leaking.
-func TestQA_AsyncLogger_HighThroughputStress(t *testing.T) {
+func TestAuditIntegration_AsyncLogger_HighThroughputStress(t *testing.T) {
 	mem := audit.NewMemorySink(6000)
 	cfg := audit.AsyncConfig{
 		BufferSize:     2048,
@@ -344,7 +332,6 @@ func TestQA_AsyncLogger_HighThroughputStress(t *testing.T) {
 	const workers = 25
 	const eventsPerWorker = totalEvents / workers
 
-	start := time.Now()
 	var wg sync.WaitGroup
 
 	for w := 0; w < workers; w++ {
@@ -363,29 +350,23 @@ func TestQA_AsyncLogger_HighThroughputStress(t *testing.T) {
 	}
 
 	wg.Wait()
-	duration := time.Since(start)
 
 	// Close logger gracefully to drain queue
-	closeStart := time.Now()
 	if err := logger.Close(); err != nil {
-		t.Fatalf("[QA DEFECT] Logger Close() returned error: %v", err)
+		t.Fatalf("Logger Close() returned error: %v", err)
 	}
-	closeDuration := time.Since(closeStart)
 
 	if mem.Len() != totalEvents {
-		t.Fatalf("[QA DEFECT] Data loss under concurrency! Expected %d, got %d", totalEvents, mem.Len())
+		t.Fatalf("Data loss under concurrency! Expected %d, got %d", totalEvents, mem.Len())
 	}
-
-	t.Logf("[QA VERIFIED] Processed %d events in %v (%.0f events/sec), drained in %v with 0 data loss.",
-		totalEvents, duration, float64(totalEvents)/duration.Seconds(), closeDuration)
 }
 
 // -----------------------------------------------------------------------------
 // 5. ECHO V5 MIDDLEWARE REAL-WORLD SCENARIO TESTS
 // -----------------------------------------------------------------------------
 
-// TestQA_Middleware_FullRESTMatrix tests complete CRUD workflows and error paths.
-func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
+// TestAuditIntegration_Middleware_FullRESTMatrix tests complete CRUD workflows and error paths.
+func TestAuditIntegration_Middleware_FullRESTMatrix(t *testing.T) {
 	e := echo.New()
 	e.Use(middleware.Recover())
 
@@ -443,11 +424,11 @@ func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
 
 	last := mem.Last()
 	if last == nil || last.Outcome.StatusCode != 201 || last.Actor.ID != "author_42" || last.Target.ID != "art_101" {
-		t.Fatalf("[QA DEFECT] POST audit entry incorrect: %+v", last)
+		t.Fatalf("POST audit entry incorrect: %+v", last)
 	}
 	bodyMeta, ok := last.Metadata["request_body"].(map[string]any)
 	if !ok || bodyMeta["password"] != privacy.RedactedString {
-		t.Errorf("[QA DEFECT] Password not sanitized in request_body metadata: %+v", bodyMeta)
+		t.Errorf("Password not sanitized in request_body metadata: %+v", bodyMeta)
 	}
 
 	// Scenario 2: GET /api/articles/123 (200 OK) -> Default policy skips successful GET
@@ -456,7 +437,7 @@ func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	e.ServeHTTP(rec2, req2)
 	if mem.Len() != memCountBefore {
-		t.Errorf("[QA DEFECT] Successful GET request was logged unexpectedly under default policy")
+		t.Errorf("Successful GET request was logged unexpectedly under default policy")
 	}
 
 	// Scenario 3: GET /api/articles/999 (404 Not Found) -> Error status MUST be logged
@@ -468,7 +449,7 @@ func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
 	}
 	last404 := mem.Last()
 	if last404.Outcome.StatusCode != 404 || last404.Outcome.Status != audit.OutcomeFailure {
-		t.Errorf("[QA DEFECT] 404 GET error was not logged correctly: %+v", last404)
+		t.Errorf("404 GET error was not logged correctly: %+v", last404)
 	}
 
 	// Scenario 4: GET /api/admin/forbidden (403 Forbidden) -> MUST be logged as OutcomeDenied
@@ -477,7 +458,7 @@ func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
 	e.ServeHTTP(rec4, req4)
 	last403 := mem.Last()
 	if last403.Outcome.StatusCode != 403 || last403.Outcome.Status != audit.OutcomeDenied {
-		t.Errorf("[QA DEFECT] 403 Forbidden was not classified as OutcomeDenied: %+v", last403)
+		t.Errorf("403 Forbidden was not classified as OutcomeDenied: %+v", last403)
 	}
 
 	// Scenario 5: DELETE /api/articles/101 (204 No Content) -> Mutating operation MUST be logged
@@ -486,7 +467,7 @@ func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
 	e.ServeHTTP(rec5, req5)
 	lastDelete := mem.Last()
 	if lastDelete.Outcome.StatusCode != 204 || lastDelete.Outcome.Status != audit.OutcomeSuccess {
-		t.Errorf("[QA DEFECT] DELETE 204 was not recorded properly: %+v", lastDelete)
+		t.Errorf("DELETE 204 was not recorded properly: %+v", lastDelete)
 	}
 
 	// Scenario 6: POST /api/crash (Panic recovered by middleware) -> MUST capture 500 error
@@ -498,15 +479,13 @@ func TestQA_Middleware_FullRESTMatrix(t *testing.T) {
 	}
 	lastCrash := mem.Last()
 	if lastCrash.Outcome.StatusCode != 500 || lastCrash.Outcome.Status != audit.OutcomeError {
-		t.Errorf("[QA DEFECT] Recovered panic not audited as OutcomeError 500: %+v", lastCrash)
+		t.Errorf("Recovered panic not audited as OutcomeError 500: %+v", lastCrash)
 	}
-
-	t.Log("[QA VERIFIED] Complete HTTP REST matrix (201, 204, 403, 404, 500, Panic) verified successfully.")
 }
 
-// TestQA_Middleware_BodyStreamReusability verifies that reading the request body
+// TestAuditIntegration_Middleware_BodyStreamReusability verifies that reading the request body
 // in the audit middleware does NOT drain the stream for downstream controllers.
-func TestQA_Middleware_BodyStreamReusability(t *testing.T) {
+func TestAuditIntegration_Middleware_BodyStreamReusability(t *testing.T) {
 	e := echo.New()
 	mem := audit.NewMemorySink(10)
 	cfg := audit.DefaultAuditConfig()
@@ -536,22 +515,20 @@ func TestQA_Middleware_BodyStreamReusability(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d", rec.Code)
 	}
 	if receivedBody != inputPayload {
-		t.Errorf("[QA DEFECT] Downstream handler could not read request body! Expected %s, got %s", inputPayload, receivedBody)
+		t.Errorf("Downstream handler could not read request body! Expected %s, got %s", inputPayload, receivedBody)
 	}
-
-	t.Log("[QA VERIFIED] Request body stream is restored cleanly for downstream handlers.")
 }
 
 // -----------------------------------------------------------------------------
 // 6. FRAMEWORK LEVEL ZERO-TRUST HARDENING INTEGRATION
 // -----------------------------------------------------------------------------
 
-// TestQA_Engine_NewSecure_AuditWiring validates that ztatic.NewSecure() activates
+// TestAuditIntegration_Engine_NewSecure_AuditWiring validates that ztatic.NewSecure() activates
 // audit logging by default and coexists harmoniously with WAF, CSRF, and Headers.
-func TestQA_Engine_NewSecure_AuditWiring(t *testing.T) {
+func TestAuditIntegration_Engine_NewSecure_AuditWiring(t *testing.T) {
 	app := ztatic.NewSecure()
 	if app.AuditLogger() == nil {
-		t.Fatalf("[QA DEFECT] app.AuditLogger() is nil on ztatic.NewSecure()")
+		t.Fatalf("app.AuditLogger() is nil on ztatic.NewSecure()")
 	}
 
 	// 1. Web route without CSRF token: CSRF blocks with 403 Forbidden, and audit logger records denial
@@ -581,8 +558,6 @@ func TestQA_Engine_NewSecure_AuditWiring(t *testing.T) {
 	if recAPI.Code != http.StatusOK {
 		t.Errorf("expected 200 OK for /api/ endpoint, got %d", recAPI.Code)
 	}
-
-	t.Log("[QA VERIFIED] Audit logging is integrated seamlessly with NewSecure() security pipeline.")
 }
 
 // -----------------------------------------------------------------------------

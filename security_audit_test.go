@@ -69,7 +69,6 @@ func TestAudit_WAF_Bypass_BodyOver128KB(t *testing.T) {
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected HTTP 413 Payload Too Large for body > 128KB, got %d", rec.Code)
 	}
-	t.Logf("[VERIFIED FIXED] Body > 128KB blocked with HTTP 413 Payload Too Large")
 }
 
 // TestAudit_WAF_Bypass_ChunkedTransferEncoding verifies that chunked transfer encoding
@@ -96,7 +95,6 @@ func TestAudit_WAF_Bypass_ChunkedTransferEncoding(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected HTTP 403 Forbidden for chunked SQLi payload, got %d", rec.Code)
 	}
-	t.Logf("[VERIFIED FIXED] Chunked transfer encoding payload inspected and blocked with HTTP 403")
 }
 
 // TestAudit_WAF_Bypass_ScriptTagWithAttributes verifies that <script> tags with attributes
@@ -124,7 +122,6 @@ func TestAudit_WAF_Bypass_ScriptTagWithAttributes(t *testing.T) {
 			t.Fatalf("expected HTTP 403 Forbidden for %s, got %d", uri, rec.Code)
 		}
 	}
-	t.Logf("[VERIFIED FIXED] All script tags with attributes and iframes blocked with HTTP 403")
 }
 
 // TestAudit_WAF_Bypass_SQLi_UnionAllSelect verifies that UNION ALL SELECT, boolean,
@@ -153,7 +150,6 @@ func TestAudit_WAF_Bypass_SQLi_UnionAllSelect(t *testing.T) {
 			t.Fatalf("expected HTTP 403 Forbidden for %s, got %d", payload, rec.Code)
 		}
 	}
-	t.Logf("[VERIFIED FIXED] All SQLi variants (UNION ALL, tautologies, delays) blocked with HTTP 403")
 }
 
 // TestAudit_WAF_Bypass_CommentObfuscation verifies that comment splitting is detected
@@ -172,7 +168,6 @@ func TestAudit_WAF_Bypass_CommentObfuscation(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected HTTP 403 Forbidden for comment-split payload, got %d", rec.Code)
 	}
-	t.Logf("[VERIFIED FIXED] Comment obfuscation blocked with HTTP 403")
 }
 
 // TestAudit_WAF_Bypass_RecursiveUnescapeError verifies that invalid URL escape sequences
@@ -192,7 +187,6 @@ func TestAudit_WAF_Bypass_RecursiveUnescapeError(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected HTTP 403 Forbidden for resilient unescape payload, got %d", rec.Code)
 	}
-	t.Logf("[VERIFIED FIXED] Resilient unescaping successfully decoded and blocked attack with HTTP 403")
 }
 
 // -----------------------------------------------------------------------------
@@ -214,7 +208,6 @@ func TestAudit_Headers_HSTS_Present(t *testing.T) {
 	if hsts == "" {
 		t.Fatalf("HSTS header is missing from NewSecure responses!")
 	}
-	t.Logf("[VERIFIED FIXED] Strict-Transport-Security header active: %s", hsts)
 }
 
 // TestAudit_CSP_Nonces_Present verifies that CSP nonces are dynamically generated per request.
@@ -240,7 +233,6 @@ func TestAudit_CSP_Nonces_Present(t *testing.T) {
 	if !strings.Contains(csp, "'nonce-"+capturedNonce+"'") {
 		t.Fatalf("expected CSP header to contain the captured nonce %q, got: %s", capturedNonce, csp)
 	}
-	t.Logf("[VERIFIED FIXED] Dynamic CSP Nonce generated and matched in header: %s", capturedNonce)
 }
 
 // TestAudit_CSRF_HardenedDefaults verifies that CSRF defaults use CookieHTTPOnly=true.
@@ -249,7 +241,6 @@ func TestAudit_CSRF_HardenedDefaults(t *testing.T) {
 	if !cfg.CSRF.CookieHTTPOnly {
 		t.Fatalf("expected CookieHTTPOnly to be true in defaults, got false")
 	}
-	t.Logf("[VERIFIED FIXED] CSRF default CookieHTTPOnly is hardened (true)")
 }
 
 // -----------------------------------------------------------------------------
@@ -308,7 +299,6 @@ func TestAudit_FieldEncryption_Integration(t *testing.T) {
 	if model.Secret != plaintext {
 		t.Fatalf("expected model.Secret to be decrypted to %q, got %q", plaintext, model.Secret)
 	}
-	t.Logf("[VERIFIED FIXED] Field-level encryption integrated via EncryptedString and BaseRepository")
 }
 
 // -----------------------------------------------------------------------------
@@ -339,7 +329,6 @@ func TestAudit_WebSocket_CSWSH_Blocked(t *testing.T) {
 	if resp != nil && resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected HTTP 403 Forbidden for untrusted origin, got %d", resp.StatusCode)
 	}
-	t.Logf("[VERIFIED FIXED] Untrusted cross-origin WebSocket connection blocked with HTTP 403")
 
 	// 2. Same-Origin connection should succeed with 101 Switching Protocols
 	sameOriginHeader := http.Header{}
@@ -352,7 +341,6 @@ func TestAudit_WebSocket_CSWSH_Blocked(t *testing.T) {
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("expected 101 Switching Protocols for same-origin, got %d", resp.StatusCode)
 	}
-	t.Logf("[VERIFIED FIXED] Same-origin WebSocket connection allowed with HTTP 101")
 }
 
 // TestAudit_TurboStream_AttributeInjection_Fixed verifies that RenderTurboStream
@@ -375,7 +363,6 @@ func TestAudit_TurboStream_AttributeInjection_Fixed(t *testing.T) {
 	if !strings.Contains(body, `&quot;`) && !strings.Contains(body, `&#34;`) {
 		t.Fatalf("expected escaped quotes in target attribute: %s", body)
 	}
-	t.Logf("[VERIFIED FIXED] Turbo Stream target attribute properly escaped: %s", body)
 }
 
 // TestAudit_ScalarUI_XSS_Fixed verifies that ServeDocs HTML-escapes generator Title.
@@ -397,7 +384,6 @@ func TestAudit_ScalarUI_XSS_Fixed(t *testing.T) {
 	if !strings.Contains(body, `&lt;script&gt;`) {
 		t.Fatalf("expected escaped script tags in title, got: %s", body)
 	}
-	t.Logf("[VERIFIED FIXED] Scalar UI Title properly HTML-escaped")
 }
 
 // TestAudit_SSE_MultiLineFraming verifies that multi-line Turbo Streams are emitted
@@ -421,11 +407,10 @@ func TestAudit_SSE_MultiLineFraming(t *testing.T) {
 			return
 		}
 
-		type dummyMultiLineComponent struct{}
 		// Send multi-line HTML message
 		_ = broker.Publish(context.Background(), "multiline-room", fullstack.TurboStreamItem{
-			Action: fullstack.StreamAppend,
-			Target: "chat",
+			Action:    fullstack.StreamAppend,
+			Target:    "chat",
 			Component: dummyComponentMultiLine{},
 		})
 
@@ -454,12 +439,11 @@ func TestAudit_SSE_MultiLineFraming(t *testing.T) {
 	if !hasEvent || dataLineCount < 2 {
 		t.Fatalf("expected multi-line SSE message with >= 2 data: lines, got %d data lines. Body:\n%s", dataLineCount, body)
 	}
-	t.Logf("[VERIFIED FIXED] Multi-line SSE message correctly formatted with %d 'data: ' prefixed lines", dataLineCount)
 }
 
 type dummyComponentMultiLine struct{}
 
 func (d dummyComponentMultiLine) Render(ctx context.Context, w io.Writer) error {
-	w.Write([]byte("<div>line1</div>\n<div>line2</div>"))
-	return nil
+	_, err := w.Write([]byte("<div>line1</div>\n<div>line2</div>"))
+	return err
 }

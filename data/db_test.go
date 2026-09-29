@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"os"
+	"strings"
 	"testing"
 )
 
