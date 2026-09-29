@@ -102,6 +102,12 @@ Write pure Go and HTML—**zero Node.js or npm required**—and compile your ent
 * **Multi-Environment Profiles:** Built-in profiles (`development`, `test`, `staging`, `production`) automatically detected via `ZTATIC_ENV`, `APP_ENV`, or `GO_ENV` with profile-specific engine defaults.
 * **1-Import Ergonomic Helpers:** `ztatic.LoadConfig[T]()`, `ztatic.MustLoadConfig[T]()`, `ztatic.ActiveProfile()`, and `ztatic.NewSecretString()`.
 
+### 13. File Testing Utility Suite (`filetest` & `fileassert`)
+* **Fluent Multipart & Download Client:** `app.TestClient()` eliminates `mime/multipart.Writer` boilerplate, supporting `.Attach()`, `.AttachBytes()`, `.AttachReader()`, `.Field()`, `.WithBearerToken()`, `.WithCookie()`, and Range streaming with HTTP 206 Partial Content verification.
+* **100% In-Memory Synthetic Fixtures:** Zero repository bloat. Generates valid images with true dimensions (`filetest.PNG`, `filetest.JPEG`, `filetest.GIF`, `filetest.WebP`, `filetest.SVG`), documents (`filetest.PDF`, `filetest.CSV`, `filetest.Text`, `filetest.JSON`), security payloads (`MaliciousSVG`, `WebShell`, `Executable`, `DisguisedExecutable`, `ZipSlip`, `ZipBomb`), virtual zero-RAM oversized streams (`filetest.Oversized`), and managed disk sandboxes (`filetest.TempSandbox`).
+* **Expressive Multi-Level Assertions:** First-class standalone assertions (`fileassert.Exists`, `fileassert.ContentEquals`, `fileassert.MalwareBlocked`, `fileassert.PartialContent`) and chained fluent response assertions (`resp.AssertOK()`, `resp.AssertDownloaded()`, `resp.AssertNoSniff()`, `resp.AssertSHA256()`).
+* **Thread-Safe Test Doubles & Fault Injection:** `MockStorage` and `MockScanner` provide call spy histories (`WasSaved`, `ScannedFiles`, `SaveCallCount`) and deterministic failure injection (`SimulateDiskFull`, `SimulatePermissionDenied`, `FailClosed` timeout simulations).
+
 ---
 
 ## Quick Start
@@ -513,6 +519,85 @@ Standardized Paginated Output (HTTP 200):
     "timestamp": "2026-09-27T12:00:00Z",
     "duration": "1.25ms"
   }
+}
+```
+
+### 8. File Testing Utility (Client, Fixtures, Assertions, and Mocks)
+
+Ztatic provides a zero-dependency testing toolkit (`filetest` and `fileassert`) allowing developers to test complex file upload, download, malware scanning, and storage interactions without manual multipart boilerplate or committing binary test files to git:
+
+```go
+package main_test
+
+import (
+	"testing"
+
+	"ztatic-go-framework"
+	"ztatic-go-framework/fileassert"
+	"ztatic-go-framework/filetest"
+	"ztatic-go-framework/upload"
+)
+
+func TestAvatarUploadAndDownload(t *testing.T) {
+	app := ztatic.NewSecure()
+	mockStore := filetest.NewMockStorage()
+	mockScan := filetest.NewMockScanner()
+
+	// 1. Mount upload & download routes
+	uploader, _ := ztatic.NewUploader(ztatic.UploadConfig{
+		AllowedMIMEs: upload.ImageMIMEs(),
+		Storage:      mockStore,
+		Scanner:      mockScan,
+	})
+
+	app.POST("/api/avatar", func(c *ztatic.Context) error {
+		fh, err := c.FormFile("avatar")
+		if err != nil {
+			return err
+		}
+		processed, err := uploader.ProcessFileHeader(c.Request().Context(), fh)
+		if err != nil {
+			return err
+		}
+		return ztatic.OK(c, ztatic.Map{"key": processed.Key})
+	})
+
+	app.GET("/api/files/:key", func(c *ztatic.Context) error {
+		return ztatic.ServeFile(c, mockStore, c.Param("key"), upload.WithInline())
+	})
+
+	client := app.TestClient()
+
+	// 2. Perform Multipart Upload with Synthetic Fixture
+	resp := client.NewUpload("/api/avatar").
+		Field("user_id", "usr_123").
+		Attach("avatar", filetest.PNG("avatar.png", 200, 200)).
+		WithBearerToken("auth-token-123").
+		Send()
+
+	resp.AssertOK(t).
+		AssertContentType(t, "application/json")
+
+	// 3. Storage & Scanner Assertions
+	fileassert.SavedCount(t, mockStore, 1)
+	fileassert.ScanCount(t, mockScan, 1)
+
+	// 4. Test HTTP 206 Partial Content Range Streaming
+	savedKey := mockStore.LastSaveCall().Key
+	rangeResp := client.NewDownload("/api/files/" + savedKey).
+		WithRange(0, 99).
+		Send()
+
+	rangeResp.AssertPartialContent(t, 0, 99, mockStore.LastSaveCall().Size).
+		AssertContentLength(t, 100).
+		AssertNoSniff(t)
+
+	// 5. Test Fault Injection (Disk Full / Permission Denied)
+	mockStore.SimulateDiskFull()
+	failResp := client.NewUpload("/api/avatar").
+		Attach("avatar", filetest.PNG("another.png", 50, 50)).
+		Send()
+	failResp.AssertStatus(t, 500)
 }
 ```
 
