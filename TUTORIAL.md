@@ -446,6 +446,7 @@ package components
 import (
 	"fmt"
 	"mywebsite/internal/models"
+	"ztatic-go-framework/fullstack"
 )
 
 templ ArticleCard(article models.Article) {
@@ -468,6 +469,7 @@ templ CreateArticleModal() {
 			<div @click.away="open = false" class="bg-white p-6 rounded-lg w-96 shadow-xl">
 				<h3 class="text-lg font-bold mb-4">Create New Article</h3>
 				<form action="/articles" method="POST" @submit="open = false">
+					<input type="hidden" name="_csrf" value={ fullstack.CSRFTokenCtx(ctx) }/>
 					<input type="text" name="title" placeholder="Title" required class="w-full mb-3 p-2 border rounded"/>
 					<textarea name="content" placeholder="Content" required class="w-full mb-3 p-2 border rounded"></textarea>
 					<input type="text" name="author" placeholder="Author Name" class="w-full mb-3 p-2 border rounded"/>
@@ -760,7 +762,6 @@ Now tie all components together in `cmd/server/main.go`:
 package main
 
 import (
-	"context"
 	"io/fs"
 	"log"
 	"os"

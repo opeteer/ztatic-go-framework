@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -50,6 +51,13 @@ func NewConfigValidator(p Profile) *ConfigValidator {
 	v := eng.Validator()
 
 	// Register custom config validation rules
+	v.RegisterCustomTypeFunc(func(field reflect.Value) any {
+		if s, ok := field.Interface().(SecretString); ok {
+			return s.Expose()
+		}
+		return nil
+	}, SecretString{})
+
 	_ = v.RegisterValidation("config_profile", validateConfigProfile)
 	_ = v.RegisterValidation("secure_secret", validateSecureSecret(p))
 	_ = v.RegisterValidation("https_url", validateHTTPSURL)

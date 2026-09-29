@@ -38,6 +38,16 @@ var buildCmd = &cobra.Command{
 		// Step 2: Native Asset Bundling & Minification
 		fmt.Println("📦 [2/4] Bundling & minifying assets (esbuild)...")
 		
+		// Clean destination directory (preserving hidden files like .gitkeep)
+		os.MkdirAll(buildDist, 0755)
+		if entries, err := os.ReadDir(buildDist); err == nil {
+			for _, entry := range entries {
+				if !strings.HasPrefix(entry.Name(), ".") {
+					_ = os.RemoveAll(filepath.Join(buildDist, entry.Name()))
+				}
+			}
+		}
+
 		var entryPoints []string
 		filepath.Walk(buildAssets, func(path string, info os.FileInfo, err error) error {
 			if err != nil {

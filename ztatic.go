@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"net/http"
+	"reflect"
 
 	"ztatic-go-framework/config"
 	"ztatic-go-framework/errors"
@@ -29,6 +30,15 @@ import (
 	"ztatic-go-framework/upload/storage"
 	"ztatic-go-framework/validation"
 )
+
+func init() {
+	validation.DefaultEngine.Validator().RegisterCustomTypeFunc(func(field reflect.Value) any {
+		if s, ok := field.Interface().(config.SecretString); ok {
+			return s.Expose()
+		}
+		return nil
+	}, config.SecretString{})
+}
 
 // Engine represents the Ztatic Framework engine, wrapping Echo v5
 // with enterprise-grade Zero-Trust Security defaults.

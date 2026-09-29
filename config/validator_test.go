@@ -102,3 +102,35 @@ func TestConfigValidator_SelfValidator(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+type MinMaxSecretConfig struct {
+	AuthSecret SecretString `validate:"required,min=32"`
+}
+
+func TestConfigValidator_SecretString_StandardRules(t *testing.T) {
+	v := NewConfigValidator(ProfileDevelopment)
+
+	// Case 1: Short secret (< 32) should fail min=32
+	shortCfg := MinMaxSecretConfig{
+		AuthSecret: NewSecretString("too-short"),
+	}
+	if err := v.Validate(shortCfg); err == nil {
+		t.Error("expected short SecretString to fail min=32 validation")
+	}
+
+	// Case 2: Valid secret (>= 32) should pass min=32
+	validCfg := MinMaxSecretConfig{
+		AuthSecret: NewSecretString("dev-secret-key-must-be-changed-in-production-min-32-bytes"),
+	}
+	if err := v.Validate(validCfg); err != nil {
+		t.Errorf("expected valid SecretString to pass min=32 validation, got: %v", err)
+	}
+
+	// Case 3: Empty secret should fail required
+	emptyCfg := MinMaxSecretConfig{
+		AuthSecret: NewSecretString(""),
+	}
+	if err := v.Validate(emptyCfg); err == nil {
+		t.Error("expected empty SecretString to fail required validation")
+	}
+}
