@@ -10,8 +10,11 @@ import (
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/redis/go-redis/v9"
 
+	"net/http"
+
 	"ztatic-go-framework/config"
 	"ztatic-go-framework/errors"
+	"ztatic-go-framework/filetest"
 	"ztatic-go-framework/log"
 	"ztatic-go-framework/rapid"
 	"ztatic-go-framework/response"
@@ -129,6 +132,11 @@ func (eng *Engine) SetMaxBodySize(bytes int64) {
 	if eng.wafCfg != nil {
 		eng.wafCfg.MaxBodySize = bytes
 	}
+}
+
+// TestClient returns a FileTestClient bound to this Engine.
+func (eng *Engine) TestClient() *filetest.Client {
+	return filetest.NewClient(eng)
 }
 
 // DX Type Aliases to match README.md and simplify developer usage
@@ -300,6 +308,27 @@ func ServeWithFilename(name string) storage.ServeOption { return storage.WithFil
 
 func ServeFile(c *Context, store storage.Storage, key string, opts ...storage.ServeOption) error {
 	return storage.ServeHTTP(c, store, key, opts...)
+}
+
+// File Testing DX Aliases
+type FileTestClient = filetest.Client
+type FileTestResponse = filetest.Response
+type UploadRequestBuilder = filetest.UploadRequestBuilder
+type DownloadRequestBuilder = filetest.DownloadRequestBuilder
+type MockStorage = filetest.MockStorage
+type MockScanner = filetest.MockScanner
+type FileFixture = filetest.FileFixture
+
+func NewFileTestClient(handler http.Handler) *filetest.Client {
+	return filetest.NewClient(handler)
+}
+
+func NewMockStorage() *filetest.MockStorage {
+	return filetest.NewMockStorage()
+}
+
+func NewMockScanner() *filetest.MockScanner {
+	return filetest.NewMockScanner()
 }
 
 // Response & Pagination DX Aliases
