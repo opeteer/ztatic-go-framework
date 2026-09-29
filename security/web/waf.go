@@ -69,9 +69,20 @@ func WAFWithConfig(cfg WAFConfig) echo.MiddlewareFunc {
 
 			// 2. Check Request Body (for POST/PUT/PATCH with payload, including chunked)
 			if req.Body != nil && req.ContentLength != 0 {
+				if override, ok := c.Get("ztatic_upload_max_body").(int64); ok && override > 0 {
+					maxBody = override
+				}
+				isUpload, _ := c.Get("ztatic_upload_route").(bool)
+				isMultipart := strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data")
+
 				if req.ContentLength > maxBody {
 					c.Logger().Warn("WAF blocked oversized request body", "size", req.ContentLength, "limit", maxBody, "ip", c.RealIP())
 					return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Payload Too Large: Security inspection limit exceeded")
+				}
+
+				// For multipart file uploads or designated upload routes, avoid buffering binary streams into strings
+				if isUpload || isMultipart {
+					return next(c)
 				}
 
 				bodyBytes, err := io.ReadAll(io.LimitReader(req.Body, maxBody+1))
@@ -128,9 +139,20 @@ func WAFWithConfigPtr(cfg *WAFConfig) echo.MiddlewareFunc {
 
 			// 2. Check Request Body
 			if req.Body != nil && req.ContentLength != 0 {
+				if override, ok := c.Get("ztatic_upload_max_body").(int64); ok && override > 0 {
+					maxBody = override
+				}
+				isUpload, _ := c.Get("ztatic_upload_route").(bool)
+				isMultipart := strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data")
+
 				if req.ContentLength > maxBody {
 					c.Logger().Warn("WAF blocked oversized request body", "size", req.ContentLength, "limit", maxBody, "ip", c.RealIP())
 					return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Payload Too Large: Security inspection limit exceeded")
+				}
+
+				// For multipart file uploads or designated upload routes, avoid buffering binary streams into strings
+				if isUpload || isMultipart {
+					return next(c)
 				}
 
 				bodyBytes, err := io.ReadAll(io.LimitReader(req.Body, maxBody+1))

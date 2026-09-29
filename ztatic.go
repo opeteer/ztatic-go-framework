@@ -21,6 +21,9 @@ import (
 	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
 	"ztatic-go-framework/trace"
+	"ztatic-go-framework/upload"
+	"ztatic-go-framework/upload/scanner"
+	"ztatic-go-framework/upload/storage"
 	"ztatic-go-framework/validation"
 )
 
@@ -242,6 +245,61 @@ func SetDatabaseResolver(resolver validation.DatabaseResolver) {
 
 func BindAndValidate(c *Context, i any) error {
 	return rapid.BindAndValidate(c, i)
+}
+
+// Upload & Storage DX Aliases
+type Uploader = upload.Manager
+type UploadConfig = upload.Config
+type ProcessedFile = upload.ProcessedFile
+type FileValidationResult = upload.ValidationResult
+type FileValidator = upload.Validator
+type Storage = storage.Storage
+type LocalStorage = storage.LocalStorage
+type MemoryStorage = storage.MemoryStorage
+type FileRecord = storage.FileRecord
+type Scanner = scanner.Scanner
+type HeuristicScanner = scanner.HeuristicScanner
+type ClamAVScanner = scanner.ClamAVScanner
+type MultiScanner = scanner.MultiScanner
+type ScanResult = scanner.ScanResult
+
+// Upload constructors and DX helper functions
+func NewUploader(cfg upload.Config) (*upload.Manager, error) {
+	return upload.NewManager(cfg)
+}
+
+func NewLocalStorage(rootDir string) (*storage.LocalStorage, error) {
+	return storage.NewLocalStorage(rootDir)
+}
+
+func NewMemoryStorage() *storage.MemoryStorage {
+	return storage.NewMemoryStorage()
+}
+
+func NewHeuristicScanner() *scanner.HeuristicScanner {
+	return scanner.NewHeuristicScanner()
+}
+
+func NewClamAVScanner(addr string) *scanner.ClamAVScanner {
+	return scanner.NewClamAVScanner(addr)
+}
+
+func UploadRouteLimit(maxBytes int64) echo.MiddlewareFunc {
+	return upload.RouteLimit(maxBytes)
+}
+
+func UploadAutoCleanup() echo.MiddlewareFunc {
+	return upload.AutoCleanup()
+}
+
+type ServeOption = storage.ServeOption
+
+func ServeWithInline() storage.ServeOption { return storage.WithInline() }
+func ServeWithDownload() storage.ServeOption { return storage.WithDownload() }
+func ServeWithFilename(name string) storage.ServeOption { return storage.WithFilename(name) }
+
+func ServeFile(c *Context, store storage.Storage, key string, opts ...storage.ServeOption) error {
+	return storage.ServeHTTP(c, store, key, opts...)
 }
 
 // Response & Pagination DX Aliases

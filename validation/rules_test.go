@@ -1,7 +1,9 @@
 package validation
 
 import (
+	"bytes"
 	"context"
+	"mime/multipart"
 	"testing"
 )
 
@@ -144,5 +146,67 @@ func TestRules_DatabaseUniquenessAndExistence(t *testing.T) {
 	}
 	if err := eng.Validate(&missingTenant); err == nil {
 		t.Fatalf("expected missing tenant to fail exists validation")
+	}
+}
+
+type fileUploadSample struct {
+	Avatar *multipart.FileHeader `validate:"required,file_max=1MB,file_min=10B,file_ext=.png;.jpg,file_mime=image/png;image/jpeg,file_image=100x100"`
+}
+
+func createTestFileHeader(filename string, data []byte) *multipart.FileHeader {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", filename)
+	_, _ = part.Write(data)
+	_ = writer.Close()
+
+	reader := multipart.NewReader(body, writer.Boundary())
+	form, _ := reader.ReadForm(int64(body.Len()))
+	return form.File["file"][0]
+}
+
+func TestRules_FileValidation(t *testing.T) {
+	eng := New()
+
+	validPNG := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+		0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+		0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+		0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+		0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+	}
+
+	// 1. Valid PNG upload
+	valid := fileUploadSample{
+		Avatar: createTestFileHeader("avatar.png", validPNG),
+	}
+	if err := eng.Validate(&valid); err != nil {
+		t.Fatalf("expected valid file to pass, got: %v", err)
+	}
+
+	// 2. Disallowed extension
+	badExt := fileUploadSample{
+		Avatar: createTestFileHeader("avatar.exe", validPNG),
+	}
+	if err := eng.Validate(&badExt); err == nil {
+		t.Errorf("expected disallowed extension .exe to fail")
+	}
+
+	// 3. File too small
+	tooSmall := fileUploadSample{
+		Avatar: createTestFileHeader("avatar.png", []byte("tiny")),
+	}
+	if err := eng.Validate(&tooSmall); err == nil {
+		t.Errorf("expected file smaller than 10B to fail")
+	}
+
+	// 4. File too large
+	bigBuf := make([]byte, 2*1024*1024) // 2MB > 1MB limit
+	tooBig := fileUploadSample{
+		Avatar: createTestFileHeader("avatar.png", bigBuf),
+	}
+	if err := eng.Validate(&tooBig); err == nil {
+		t.Errorf("expected file larger than 1MB to fail")
 	}
 }
