@@ -36,3 +36,7 @@ testapp/
 # Frontend build artifacts
 dist/
 node_modules/
+
+# Framework documentation summary
+project_master_summary.md
+
