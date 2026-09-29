@@ -1,8 +1,10 @@
 # Ztatic Framework Tutorial: Building High-Performance Web Applications in Go
 
-Welcome to the official step-by-step tutorial for building modern, secure, full-stack web applications using the **Ztatic Framework**.
+Welcome to the official step-by-step tutorial for building modern, secure, enterprise-grade full-stack web applications using the **Ztatic Framework**.
 
-Ztatic is a modern, open-source, full-stack Go framework built on top of **Echo v5**. It enables developers to build rich, dynamic, real-time web applications using the **HOTW (HTML Over The Wire)** stack—combining **Templ**, **Hotwire (Turbo 8)**, **Alpine.js**, native **esbuild** bundling, **OpenAPI 3.0 generation**, and **Realtime Pub/Sub (SSE & WebSockets)**—all without requiring Node.js or npm.
+Ztatic is a modern, open-source, full-stack Go framework built on top of **Echo v5**. It enables developers to craft fast, resilient, real-time web applications using the **HOTW (HTML Over The Wire)** paradigm—combining **Templ**, **Hotwire (Turbo 8)**, **Alpine.js**, native **esbuild** bundling, **OpenAPI 3.0 generation**, and **Realtime Pub/Sub (SSE & WebSockets)**—all without requiring Node.js, npm, or heavy frontend build pipelines.
+
+Underneath the presentation layer, Ztatic provides an uncompromising **Zero-Trust** foundation: type-safe cascading environment configuration, W3C distributed tracing, structured operational logging, compliance audit trails, standardized domain error handling, canonical API response envelopes, and a fluid data tier powered by reflection mapping, Squirrel AST queries, Goose migrations, and generic repositories.
 
 ---
 
@@ -12,21 +14,25 @@ Ztatic is a modern, open-source, full-stack Go framework built on top of **Echo 
 2. [Ztatic Framework Directory & Module Structure](#2-ztatic-framework-directory--module-structure)
 3. [Step 1: Environment Setup & Installing the `ztatic` CLI](#step-1-environment-setup--installing-the-ztatic-cli)
 4. [Step 2: Scaffolding a New Application](#step-2-scaffolding-a-new-application)
-5. [Step 3: Database & Data Tier Setup (Squirrel & Goose)](#step-3-database--data-tier-setup-squirrel--goose)
-6. [Step 4: Crafting Views (Layouts & Templ Components)](#step-4-crafting-views-layouts--templ-components)
-7. [Step 5: Implementing Rapid REST APIs & Interactive OpenAPI Docs](#step-5-implementing-rapid-rest-apis--interactive-openapi-docs)
-8. [Step 6: Adding Real-Time Updates (SSE, WebSockets & Redis Pub/Sub)](#step-6-adding-real-time-updates-sse-websockets--redis-pubsub)
-9. [Step 7: Asset Management & Client Micro-Interactions](#step-7-asset-management--client-micro-interactions)
-10. [Step 8: Development Workflow (Live Reload)](#step-8-development-workflow-live-reload)
-11. [Step 9: Production Build & Single-Binary Deployment](#step-9-production-build--single-binary-deployment)
+5. [Step 3: Zero-Trust Environment Configuration (`config`)](#step-3-zero-trust-environment-configuration-config)
+6. [Step 4: Database & Data Tier Setup (Engine, Mapper, Migrations & Transactions)](#step-4-database--data-tier-setup-engine-mapper-migrations--transactions)
+7. [Step 5: Crafting Views (Layouts, Templ Components & Micro-Interactions)](#step-5-crafting-views-layouts-templ-components--micro-interactions)
+8. [Step 6: Implementing Rapid REST APIs, Input Sanitization & OpenAPI Docs](#step-6-implementing-rapid-rest-apis-input-sanitization--openapi-docs)
+9. [Step 7: Adding Real-Time Updates (SSE, WebSockets & Pub/Sub)](#step-7-adding-real-time-updates-sse-websockets--pubsub)
+10. [Step 8: Zero-Trust Observability (W3C Tracing, Structured Logging & Audit Trail)](#step-8-zero-trust-observability-w3c-tracing-structured-logging--audit-trail)
+11. [Step 9: Asset Management & Client Integration](#step-9-asset-management--client-integration)
+12. [Step 10: Assembling the Full Application Server (`cmd/server/main.go`)](#step-10-assembling-the-full-application-server-cmdservermaingo)
+13. [Step 11: Development Workflow (Live Reload)](#step-11-development-workflow-live-reload)
+14. [Step 12: Production Build & Single-Binary Deployment](#step-12-production-build--single-binary-deployment)
+15. [Summary Checklist](#summary-checklist)
 
 ---
 
 ## 1. Understanding the Ztatic Architecture
 
-Before writing code, it is essential to understand how Ztatic operates under the hood.
+Before writing code, it is essential to understand how Ztatic operates end-to-end.
 
-```
+```text
                   ┌────────────────────────────────────────────────────────┐
                   │                    Client Browser                      │
                   └───────┬────────────────────────┬───────────────────────┘
@@ -37,7 +43,11 @@ Before writing code, it is essential to understand how Ztatic operates under the
        ┌────────────────────────────────────────────────────────────────┐
        │                      Ztatic Engine                             │
        │  ┌──────────────────────────────────────────────────────────┐  │
-       │  │ Security Pipeline (WAF, CSP, Hardened CSRF, HSTS)        │  │
+       │  │ Observability Pipeline (W3C Tracing, Request ID, Slog)   │  │
+       │  └────────────────────────────┬─────────────────────────────┘  │
+       │                               ▼                                │
+       │  ┌──────────────────────────────────────────────────────────┐  │
+       │  │ Security Pipeline (WAF, CSP Nonces, CSRF, Audit Ledger)  │  │
        │  └────────────────────────────┬─────────────────────────────┘  │
        │                               ▼                                │
        │  ┌──────────────────────────────────────────────────────────┐  │
@@ -47,20 +57,29 @@ Before writing code, it is essential to understand how Ztatic operates under the
        │         ▼             ▼             ▼             ▼            │
        │   ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐      │
        │   │ Fullstack │ │ Realtime  │ │   Data    │ │   Rapid   │      │
-       │   │ (Templ +  │ │(Pub/Sub + │ │(Squirrel+ │ │ (OpenAPI  │      │
-       │   │ esbuild)  │ │WS / SSE)  │ │  Goose)   │ │ + Scalar) │      │
-       │   └───────────┘ └───────────┘ └───────────┘ └───────────┘      │
+       │   │  (Templ + │ │ (Pub/Sub +│ │ (Engine + │ │ (OpenAPI  │      │
+       │   │ esbuild)  │ │  WS/SSE)  │ │  Mapper)  │ │ + Scalar) │      │
+       │   └─────┬─────┘ └─────┬─────┘ └─────┬─────┘ └─────┬─────┘      │
+       │         └─────────────┼─────────────┼─────────────┘            │
+       │                       ▼             ▼                          │
+       │          ┌──────────────────────────────────────┐              │
+       │          │ Zero-Trust Config, Secrets & Errors  │              │
+       │          └──────────────────────────────────────┘              │
        └────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Technical Pillars
 
-1. **Zero Node.js Overhead**: Native Go bindings run `esbuild` directly in memory to transpile TypeScript, bundle JavaScript, and compile CSS in under 10 milliseconds.
-2. **HTML Over The Wire (HOTW)**: Instead of sending JSON and executing heavy client-side JavaScript frameworks, Ztatic renders type-safe Go components using **Templ** and streams DOM mutations over HTTP via **Hotwire Turbo 8**.
+1. **Zero Node.js Overhead**: Native Go bindings run `esbuild` directly in memory to transpile TypeScript, bundle JavaScript, and compile CSS in under 10 milliseconds without requiring npm, yarn, or Node.js runtimes.
+2. **HTML Over The Wire (HOTW)**: Instead of sending heavy JSON payloads and managing brittle client-side single-page application (SPA) state, Ztatic renders type-safe Go components using **Templ** and streams DOM mutations over HTTP using **Hotwire Turbo 8**.
 3. **Smart Layout Unwrapping**: During navigation inside `<turbo-frame>` containers, Ztatic automatically detects frame request headers (`Turbo-Frame`) and bypasses outer HTML layout rendering, reducing bandwidth consumption by up to 80%.
-4. **Real-Time Push without JS Boilerplate**: By linking Server-Sent Events (SSE) or WebSockets directly to Hotwire Turbo Streams (`<turbo-stream-from src="/sse?topic=room">`), the backend can mutate client DOM elements instantly without requiring custom client JavaScript code.
-5. **Dynamic OpenAPI 3.0 Generation**: Introspects Echo routes and struct validation tags (`json` and `validate`) using Go reflection to automatically build OpenAPI 3.0.3 specs rendered interactively via **Scalar UI**, with recursive property merging for embedded anonymous structs.
-6. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) payload inspection (URIs and request bodies up to 128KB with 413 oversized rejection), multiline XSS protection, targeted HTML event-handler blocking, resilient URL unescaping, SQL comment normalization, per-request nonce-based Content Security Policy (`fullstack.Nonce(c)`), HSTS, hardened CSRF (`HttpOnly` with automatic `/api/` and `/docs` skipping, and `fullstack.CSRFField(c)` helpers), Argon2id password hashing, and AES-256-GCM database field encryption (`crypto.EncryptedString` initialized via `app.SetCipherKey` or `ZTATIC_CIPHER_KEY`).
+4. **Real-Time Push without JS Boilerplate**: By linking Server-Sent Events (SSE) or WebSockets directly to Hotwire Turbo Streams (`<turbo-stream-from src="/sse?topic=room">`), the backend mutates client DOM elements instantly without requiring custom client-side JavaScript.
+5. **Zero-Trust Environment Configuration**: Strongly-typed struct configuration binding with 4-tier dotenv cascading (`.env` $\rightarrow$ `.env.local` $\rightarrow$ `.env.{profile}` $\rightarrow$ `.env.{profile}.local`), nested `${VAR:-default}` expansion, runtime profiles (`development`, `test`, `staging`, `production`), and opaque `SecretString` wrappers that mask sensitive values in logs and JSON.
+6. **W3C Distributed Tracing & Request Correlation**: Conforms to W3C Trace Context recommendations (`traceparent`, `tracestate`), sanitizes incoming correlation headers (`X-Request-ID`), binds trace IDs to the request context, and provides outbound HTTP transport propagation.
+7. **Type-Safe Modern Data Tier**: High-performance persistence layer featuring `data.NewDBEngine` with automatic dialect placeholder resolution (PostgreSQL `$` vs. MySQL/SQLite `?`), reflection mapping with struct tags (`db`, `ztatic:"encrypt"`), fluent Squirrel AST query helpers, nested ACID transactions with Savepoint support, and a generic `BaseRepository[T]` that natively implements standard REST and paginated operations.
+8. **Automated REST APIs & Interactive OpenAPI 3.0**: Dynamic route introspection and reflection tag parsing produce OpenAPI 3.0.3 specifications rendered interactively via **Scalar UI** at `/docs`, with recursive embedded struct property merging and automatic validation schema generation.
+9. **Standardized Responses & Domain Errors**: Canonical `Envelope[T]` contracts guarantee type safety and normalize empty slices to `[]` instead of `null`. Errors are mapped from clean architecture domain errors into RFC 9457 Problem Details with zero-trust information scrubbing in production.
+10. **Zero-Trust Web Security Suite**: Built-in Web Application Firewall (WAF) payload inspection (URIs and request bodies up to 128KB with 413 oversized rejection), multiline XSS protection, targeted HTML event-handler blocking, resilient URL unescaping, SQL comment normalization, per-request nonce-based Content Security Policy (`fullstack.Nonce(c)`), HSTS, hardened CSRF (`HttpOnly` with automatic `/api/` and `/docs` skipping), Argon2id password hashing, and AES-256-GCM database field encryption (`ztatic:"encrypt"`).
 
 ---
 
@@ -72,6 +91,8 @@ When you scaffold a Ztatic project, you work with a standard architectural layou
 
 ```text
 mywebsite/
+├── .env                     # Local environment configuration
+├── .env.example             # Configuration blueprint template
 ├── assets/                  # Frontend raw source files
 │   ├── css/                 # Global stylesheets & CSS source files
 │   └── js/                  # Alpine.js modules, controllers, TypeScript/JS source
@@ -80,27 +101,40 @@ mywebsite/
 │       └── main.go          # Application entrypoint & HTTP server bootstrapping
 ├── db/
 │   └── migrations/          # Embedded SQL schema migrations (Goose format)
+├── dist/                    # Bundled, minified, content-hashed static output
+│   └── .gitkeep
+├── dist.go                  # Root package embed.FS for single-binary distribution
+├── go.mod                   # Go module definition
 ├── internal/
+│   ├── config/              # Type-safe environment configuration schema
+│   │   └── config.go
 │   ├── controllers/         # HTTP Route Handlers & Controller logic
-│   ├── models/              # Business Domain structs & database schemas
-│   ├── repositories/        # Data Access layer (Squirrel & Generic BaseRepository)
+│   ├── models/              # Business domain structs & database schemas
+│   ├── repositories/        # Data access layer (Generic BaseRepository & Squirrel)
 │   └── views/               # Type-safe Templ view templates
 │       ├── components/      # Modular, reusable UI components
 │       └── layouts/         # Master layout wrappers (HTML head, shell, nav)
-└── go.mod                   # Go module definition
+└── tools.go                 # Go toolchain runtime dependencies & generator locks
 ```
 
 ### Core Framework Modules Breakdown
 
 | Module Package | Path | Responsibilities |
 | :--- | :--- | :--- |
-| **`ztatic`** | [`ztatic.go`](file:///home/opeteer/ztatic-go-framework/ztatic.go) | Central engine constructor (`NewSecure()`), exporting convenience type aliases (`Context`, `HandlerFunc`, `Map`, `Group`), pre-wiring WAF, CSRF, CSP, and rate limiting onto Echo v5. |
-| **`fullstack`** | [`fullstack/`](file:///home/opeteer/ztatic-go-framework/fullstack) | Layout rendering (`RenderLayout`), Turbo Stream responses (`RenderTurboStream`), asset pipeline (`MountAssets`, `esbuild`), and content hashing manifest. |
-| **`realtime`** | [`realtime/`](file:///home/opeteer/ztatic-go-framework/realtime) | Memory and Redis Pub/Sub brokers (`MemoryBroker`, `RedisBroker`), SSE Handler (`SSEHandler`), and WebSocket Handler (`WebSocketHandler`). |
-| **`security`** | [`security/`](file:///home/opeteer/ztatic-go-framework/security) | WAF inspection engine (deep URI & request body payload scanning, multiline XSS, HTML event attributes, SQL comment normalization), security response headers, hardened CSRF middleware, Argon2id hashing, and AES-256 field encryption. |
-| **`data`** | [`data/`](file:///home/opeteer/ztatic-go-framework/data) | Database pool wrapper (`DBEngine`), Squirrel query builder (`squirrel.StatementBuilderType`), generic `BaseRepository[T]`, and Goose embedded SQL migrations (`RunMigrations`). |
-| **`rapid`** | [`rapid/`](file:///home/opeteer/ztatic-go-framework/rapid) | Automatic RESTful controller mapping (`RegisterResource`), OpenAPI 3.0 generation (`OpenAPIGenerator`) with recursive anonymous struct property merging, reflection tag parsing, and Scalar UI docs rendering. |
-| **`echo`** | [`echo/`](file:///home/opeteer/ztatic-go-framework/echo) | Core router with radix tree node compaction (`Remove`), and HTTPS/TLS reverse proxying (`proxyHTTP`, `proxyRaw`). |
+| **`ztatic`** | [`ztatic.go`](file:///home/opeteer/ztatic-go-framework/ztatic.go) | Central engine constructor (`NewSecure()`), exporting convenience type aliases (`Context`, `HandlerFunc`, `Map`, `Group`), top-level DX helpers (`OK`, `Created`, `Paginated`, `MustLoadConfig`), and pre-wiring the full Zero-Trust security and observability pipeline onto Echo v5. |
+| **`config`** | [`config/`](file:///home/opeteer/ztatic-go-framework/config) | Zero-trust environment configuration engine: 4-tier dotenv cascading, profile management (`development`, `test`, `staging`, `production`), struct tag binding (`env`, `envDefault`), fail-fast validation, and opaque `SecretString` / `Secret[T]` wrappers. |
+| **`trace`** | [`trace/`](file:///home/opeteer/ztatic-go-framework/trace) | W3C distributed tracing (`traceparent`, `tracestate`), URL-safe timestamped request ID generation (`GenerateRequestID`), request ID sanitization, Echo tracing middleware, context accessors, and outbound HTTP `Transport` / `Client` propagation. |
+| **`data`** | [`data/`](file:///home/opeteer/ztatic-go-framework/data) | Connection pool wrapper (`DBEngine`), reflection struct mapper (`ScanOne`, `ScanAll`, `ExtractValues`), fluent Squirrel AST query helpers, Goose embedded SQL migrations (`RunMigrations`), nested transactions with savepoints (`TransactionCtx`), and generic `BaseRepository[T]`. |
+| **`validation`** | [`validation/`](file:///home/opeteer/ztatic-go-framework/validation) | Zero-trust input sanitization engine (`sanitize` tags), built-in security rules (`strong_password`, `xss_safe`, `no_sql_injection`, `safe_path`), domain validators (`slug`, `phone`, `unique`, `exists`), custom error messages (`message` tags), and `rapid.BindAndValidate`. |
+| **`response`** | [`response/`](file:///home/opeteer/ztatic-go-framework/response) | Canonical type-safe envelope (`Envelope[T]`), empty slice normalization (`[]`), offset and cursor pagination, HATEOAS link generator, RFC 5988 `Link` HTTP header injection, and raw JSON escape hatches. |
+| **`errors`** | [`errors/`](file:///home/opeteer/ztatic-go-framework/errors) | Domain application errors (`errors.Error` / `ztatic.AppError`), RFC 9457 Problem Details formatting, automatic HTTP status code mapping, and zero-trust internal cause scrubbing in production environments. |
+| **`log`** | [`log/`](file:///home/opeteer/ztatic-go-framework/log) | Standard Go `log/slog` structured operational logging, dual-mode formatting (colorized terminal in development, NDJSON in production), request logging middleware with latency and status recording, dynamic log level switching, and PII masking. |
+| **`security`** | [`security/`](file:///home/opeteer/ztatic-go-framework/security) | Web security suite: deep WAF URI/body inspection, nonces-based CSP (`fullstack.Nonce(c)`), hardened Double-Submit CSRF, Argon2id hashing, AES-256-GCM field encryption, compliance audit logging (`security/audit`), JWT/AEAD tokens (`security/token`), and stateful/stateless browser sessions (`security/session`). |
+| **`fullstack`** | [`fullstack/`](file:///home/opeteer/ztatic-go-framework/fullstack) | Layout rendering (`RenderLayout`), Turbo Frame detection (`IsTurboFrame`), Turbo Stream responses (`RenderTurboStream`), asset pipeline (`MountAssets`, `esbuild`), and content hashing manifest. |
+| **`realtime`** | [`realtime/`](file:///home/opeteer/ztatic-go-framework/realtime) | Pub/Sub messaging engine: local `MemoryBroker` for single instances, distributed `RedisBroker` for multi-node clusters, Server-Sent Events (`SSEHandler`), and full-duplex WebSockets (`WebSocketHandler`). |
+| **`rapid`** | [`rapid/`](file:///home/opeteer/ztatic-go-framework/rapid) | Dynamic RESTful route registration (`RegisterResource`), struct validation reflection, automated OpenAPI 3.0.3 JSON schema generation, and interactive Scalar UI docs rendering at `/docs`. |
+| **`echo`** | [`echo/`](file:///home/opeteer/ztatic-go-framework/echo) | Core router with radix tree node compaction (`Remove`), fast-path query binding, and HTTPS/TLS reverse proxying (`proxyHTTP`, `proxyRaw`). |
+| **`cmd/ztatic`** | [`cmd/ztatic/`](file:///home/opeteer/ztatic-go-framework/cmd/ztatic) | Developer CLI: project scaffolding (`ztatic new`), live-reloading dev server with debounced watching (`ztatic dev`), and single-binary production compiler (`ztatic build`). |
 
 ---
 
@@ -135,6 +169,12 @@ Verify installation:
 ztatic --help
 ```
 
+> [!TIP]
+> **Air-Gapped & Corporate Environments:** In strict enterprise sandboxes or offline networks where outbound access to Go's checksum server (`sum.golang.org`) is restricted, configure Go to bypass sumdb checks:
+> ```bash
+> export GOSUMDB=off
+> ```
+
 ---
 
 ## Step 2: Scaffolding a New Application
@@ -146,17 +186,76 @@ ztatic new mywebsite
 cd mywebsite
 ```
 
-This command generates the complete Ztatic architectural directory structure along with pre-configured `cmd/server/main.go` and `go.mod`.
+### What `ztatic new` Generates:
+1. **Directory Tree**: Standard architectural folders for assets, controllers, models, views, repositories, and migrations.
+2. **Configuration Blueprint**: Pre-configured `.env` and `.env.example` files containing defaults for ports, application names, and secrets.
+3. **Type-Safe Config Model**: `internal/config/config.go` with environment struct binding.
+4. **Single-Binary Root Embed**: `dist.go` at the root package exposing `//go:embed all:dist` as `mywebsite.DistFS`.
+5. **Toolchain Locks**: `tools.go` pre-wiring Templ and runtime dependencies.
+6. **Application Entrypoint**: `cmd/server/main.go` ready for development and deployment.
 
 ---
 
-## Step 3: Database & Data Tier Setup (Squirrel & Goose)
+## Step 3: Zero-Trust Environment Configuration (`config`)
 
-Ztatic provides a high-performance data layer via `ztatic-go-framework/data`.
+Enterprise web applications must never hardcode configuration values or leak credentials. Ztatic provides a zero-trust configuration engine built into `ztatic-go-framework/config`.
 
-### 1. Define a Data Model (`internal/models/article.go`)
+### 1. Define the Configuration Schema (`internal/config/config.go`)
 
-Create `internal/models/article.go` with validation tags:
+Open `internal/config/config.go` and define your strongly-typed configuration struct:
+
+```go
+package config
+
+import (
+	"ztatic-go-framework"
+)
+
+// AppConfig defines the application's environment configuration schema.
+type AppConfig struct {
+	AppName     string              `env:"APP_NAME" envDefault:"mywebsite" validate:"required"`
+	Port        string              `env:"PORT" envDefault:"8080" validate:"required"`
+	DatabaseDSN string              `env:"DATABASE_DSN" envDefault:"app.db" validate:"required"`
+	CipherKey   ztatic.SecretString `env:"ZTATIC_CIPHER_KEY" envDefault:"01234567890123456789012345678901"`
+	AuthSecret  ztatic.SecretString `env:"AUTH_SECRET" envDefault:"dev-secret-key-must-be-changed-in-production-min-32-bytes" validate:"required,min=32"`
+}
+```
+
+### 2. Configure Local Environment Variables (`.env`)
+
+Edit `.env` in your project root:
+
+```ini
+APP_NAME=mywebsite
+PORT=8080
+DATABASE_DSN=app.db
+ZTATIC_CIPHER_KEY=01234567890123456789012345678901
+AUTH_SECRET=dev-secret-key-must-be-changed-in-production-min-32-bytes
+```
+
+### 3. Understanding Zero-Trust Configuration Features
+
+- **Dotenv Cascading**: Loads configuration in cascading order:
+  $$\text{.env} \longrightarrow \text{.env.local} \longrightarrow \text{.env.\{profile\}} \longrightarrow \text{.env.\{profile\}.local}$$
+  Process `os.Environ()` variables always take final precedence.
+- **Nested Variable Expansion**: Supports shell syntax such as `${DATABASE_PATH:-data/app.db}`.
+- **Opaque `SecretString` & `Secret[T]`**:
+  - Automatically serializes as `"[REDACTED]"` when printed via `fmt.Printf`, logged with `slog`, or serialized to JSON.
+  - Access the raw plaintext only when intentionally passing to database drivers or crypto modules using `secret.Expose()` or `secret.Value()`.
+  - Securely wipe secrets from heap memory when discarded using `secret.Destroy()`.
+  - Seamlessly resolve Docker/Kubernetes volume secrets via `file:///run/secrets/api_key` or AES-GCM encrypted secrets via `enc:aes-gcm:<ciphertext>`.
+- **Profiles**: Automatically detected via `ZTATIC_ENV`, `APP_ENV`, or `GO_ENV` (`development`, `test`, `staging`, `production`).
+- **Fail-Fast Validation**: Loading configuration via `ztatic.MustLoadConfig[AppConfig]()` validates every struct tag at startup, refusing to boot if mandatory variables are missing.
+
+---
+
+## Step 4: Database & Data Tier Setup (Engine, Mapper, Migrations & Transactions)
+
+Ztatic provides a unified persistence layer via `ztatic-go-framework/data`.
+
+### 1. Define the Domain Model (`internal/models/article.go`)
+
+Create `internal/models/article.go` with database mapping and validation tags:
 
 ```go
 package models
@@ -164,20 +263,21 @@ package models
 import "time"
 
 type Article struct {
-	ID        int       `json:"id" db:"id" validate:"required"`
-	Title     string    `json:"title" db:"title" validate:"required,min=3,max=100"`
-	Content   string    `json:"content" db:"content" validate:"required"`
-	Author    string    `json:"author" db:"author"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID          int       `json:"id" db:"id,primarykey,autoincrement"`
+	Title       string    `json:"title" db:"title" validate:"required,min=3,max=100,xss_safe" message:"Title is required and must be between 3 and 100 characters"`
+	Content     string    `json:"content" db:"content" validate:"required"`
+	Author      string    `json:"author" db:"author" validate:"required"`
+	SecretNotes string    `json:"secret_notes,omitempty" db:"secret_notes" ztatic:"encrypt"`
+	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 }
 ```
 
 > [!TIP]
-> **Field-Level Encryption**: To encrypt sensitive fields (e.g., API keys, tokens) at rest using AES-256-GCM, tag fields with `ztatic:"encrypt"` or use the `crypto.EncryptedString` type. Configure your 32-byte key in code via `app.SetCipherKey([]byte("..."))` or set the `ZTATIC_CIPHER_KEY` environment variable.
+> **Field-Level AES-256-GCM Encryption:** Fields tagged with `ztatic:"encrypt"` (such as `SecretNotes`) are automatically encrypted before writing to the database and decrypted upon scanning by `BaseRepository[T]`. This uses the 32-byte key set via `app.SetCipherKey(...)` or the `ZTATIC_CIPHER_KEY` environment variable.
 
 ### 2. Embedded SQL Migrations (`db/migrations/00001_create_articles_table.sql`)
 
-Create an embedded migration using Goose format:
+Create `db/migrations/00001_create_articles_table.sql`:
 
 ```sql
 -- +goose Up
@@ -186,6 +286,7 @@ CREATE TABLE articles (
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     author TEXT NOT NULL,
+    secret_notes TEXT,
     created_at DATETIME NOT NULL
 );
 
@@ -193,9 +294,21 @@ CREATE TABLE articles (
 DROP TABLE articles;
 ```
 
-### 3. Implement Generic Repository with Squirrel AST (`internal/repositories/article_repository.go`)
+Create `db/migrations/embed.go` to bundle migrations directly into your binary:
 
-Leverage Ztatic's generic `BaseRepository[T]` and Squirrel AST query builder:
+```go
+package migrations
+
+import "embed"
+
+// MigrationFS embeds all SQL migration files for single-binary deployment
+//go:embed *.sql
+var MigrationFS embed.FS
+```
+
+### 3. Implement Generic Repository with AST Query Helpers (`internal/repositories/article_repository.go`)
+
+Leverage Ztatic's generic `BaseRepository[T]`:
 
 ```go
 package repositories
@@ -203,7 +316,6 @@ package repositories
 import (
 	"context"
 
-	"github.com/Masterminds/squirrel"
 	"ztatic-go-framework/data"
 	"mywebsite/internal/models"
 )
@@ -218,62 +330,67 @@ func NewArticleRepository(db *data.DBEngine) *ArticleRepository {
 	}
 }
 
-// Custom query using Squirrel AST query building
+// Custom query using Ztatic fluent query helpers and Squirrel AST
 func (r *ArticleRepository) FindByAuthor(ctx context.Context, author string) ([]models.Article, error) {
-	query, args, err := r.DB.Builder.
-		Select("id", "title", "content", "author", "created_at").
-		From(r.TableName).
-		Where(squirrel.Eq{"author": author}).
-		ToSql()
+	return r.Find(ctx,
+		data.WhereEq("author", author),
+		data.OrderByDesc("created_at"),
+	)
+}
 
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := r.DB.SQL.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var articles []models.Article
-	for rows.Next() {
-		var a models.Article
-		if err := rows.Scan(&a.ID, &a.Title, &a.Content, &a.Author, &a.CreatedAt); err != nil {
-			return nil, err
-		}
-		articles = append(articles, a)
-	}
-	return articles, nil
+// Search articles by title keyword
+func (r *ArticleRepository) Search(ctx context.Context, term string) ([]models.Article, error) {
+	return r.Find(ctx,
+		data.WhereLike("title", "%"+term+"%"),
+		data.OrderByDesc("created_at"),
+		data.Limit(50),
+	)
 }
 ```
 
-> [!TIP]
-> **Database Initialization & Generic Stubs**:
-> - Initialize your database pool using `sql.Open("sqlite", "app.db")` and wrap it via `dbEngine := &data.DBEngine{SQL: sqlDB, Builder: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)}`. *(Note: when using SQLite with `database/sql`, import a pure-Go driver such as `_ "modernc.org/sqlite"`).*
-> - `BaseRepository[T]` implements default stubs for `rapid.Resource[T]` (`FindAll`, `FindByID`, `Create`, `Update`, `Delete`) returning `HTTP 501 Not Implemented`. Developers can selectively override these methods in `ArticleRepository` with SQL queries or Squirrel AST operations.
+### 4. Built-in Capabilities of `BaseRepository[T]`
+
+Ztatic's `BaseRepository[T]` eliminates boilerplate data access code. It out-of-the-box implements:
+
+- **Full REST & Pagination Contracts**: Fully implements `rapid.Resource[T]` (`FindAll`, `FindByID`, `Create`, `Update`, `Delete`) and `rapid.PaginatedResource[T]` (`FindAllPaginated`).
+- **CRUD Operations**:
+  - `r.GetByID(ctx, id)`: Fetches a single record by primary key with automatic struct mapping and field decryption.
+  - `r.Find(ctx, opts...)`: Fetches records using fluent query options (`WhereEq`, `WhereIn`, `WhereBetween`, `OrderByDesc`, `Limit`, etc.).
+  - `r.FindPaginated(ctx, pageParams, opts...)`: Executes count and select queries, returning results with pagination metadata.
+  - `r.FindCursor(ctx, cursorParams, cursorCol, opts...)`: Executes keyset/cursor queries for infinite feeds.
+  - `r.Insert(ctx, entity)`: Inserts a record and populates auto-increment primary keys back onto the struct.
+  - `r.InsertMany(ctx, entities)`: Batch multi-row insert.
+  - `r.Save(ctx, entity)`: Updates a record identified by its primary key.
+  - `r.UpdateColumns(ctx, id, valuesMap)`: Updates specific columns without re-writing the full entity.
+  - `r.DeleteByID(ctx, id)` / `r.DeleteWhere(ctx, pred, args...)`: Deletes matching records.
+  - `r.Count(ctx, opts...)` / `r.Exists(ctx, opts...)`: Efficient aggregation checks.
+- **Ambient ACID Transactions & Savepoints**:
+  ```go
+  err := dbEngine.TransactionCtx(ctx, func(txCtx context.Context) error {
+      // Any repository method passed txCtx automatically participates in the transaction!
+      if err := repo.Insert(txCtx, &article1); err != nil {
+          return err // Automatic rollback
+      }
+      return repo.Insert(txCtx, &article2) // Automatic commit
+  })
+  ```
+  If `TransactionCtx` is invoked when an ambient transaction already exists on `ctx`, Ztatic automatically creates an internal SQL **Savepoint** (`SAVEPOINT sp_ztatic_N`) for safe nested transactions!
 
 > [!TIP]
-> After setting up your database models and repository, run `go mod tidy` in your project root to download the required data tier dependencies (`squirrel` and `goose`):
-> ```bash
-> go mod tidy
+> When using SQLite with Go `database/sql`, import a pure-Go driver in your application entrypoint:
+> ```go
+> import _ "modernc.org/sqlite"
 > ```
 
 ---
 
-## Step 4: Crafting Views (Layouts & Templ Components)
+## Step 5: Crafting Views (Layouts, Templ Components & Micro-Interactions)
 
 Ztatic uses **Templ** for type-safe, compiled HTML templates in Go.
 
-> [!TIP]
-> Newly scaffolded Ztatic projects are pre-wired with the Templ runtime dependency via `tools.go`. If configuring an existing module manually, add the dependency with:
-> ```bash
-> go get github.com/a-h/templ
-> ```
+### 1. Main Layout Shell (`internal/views/layouts/app_layout.templ`)
 
-### 1. Main Layout (`internal/views/layouts/app_layout.templ`)
-
-Define the outer shell with Hotwire Turbo & Alpine.js scripts included:
+Define the master layout shell in `internal/views/layouts/app_layout.templ`:
 
 ```html
 package layouts
@@ -288,7 +405,7 @@ templ AppLayout(content templ.Component) {
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 		<title>My Ztatic Website</title>
 		
-		<!-- Loaded from native esbuild pipeline -->
+		<!-- Loaded from native esbuild pipeline with content hash -->
 		<link rel="stylesheet" href={ fullstack.AssetURL("app.css") }/>
 		<script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.0-beta.2/dist/turbo.es2017-umd.js"></script>
 		<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -316,7 +433,12 @@ templ AppLayout(content templ.Component) {
 }
 ```
 
-### 2. Article Component (`internal/views/components/article_card.templ`)
+> [!NOTE]
+> **Smart Layout Unwrapping:** When a user navigates between `<turbo-frame>` containers, `fullstack.RenderLayout` automatically inspects the `Turbo-Frame` request header and strips the outer layout shell, transmitting only the inner component over the wire.
+
+### 2. Article Components & Alpine.js Modal (`internal/views/components/article_card.templ`)
+
+Create `internal/views/components/article_card.templ`:
 
 ```html
 package components
@@ -348,6 +470,8 @@ templ CreateArticleModal() {
 				<form action="/articles" method="POST" @submit="open = false">
 					<input type="text" name="title" placeholder="Title" required class="w-full mb-3 p-2 border rounded"/>
 					<textarea name="content" placeholder="Content" required class="w-full mb-3 p-2 border rounded"></textarea>
+					<input type="text" name="author" placeholder="Author Name" class="w-full mb-3 p-2 border rounded"/>
+					<input type="text" name="secret_notes" placeholder="Confidential Notes (Encrypted at Rest)" class="w-full mb-3 p-2 border rounded"/>
 					<div class="flex justify-end space-x-2">
 						<button type="button" @click="open = false" class="px-4 py-2 border rounded">Cancel</button>
 						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
@@ -379,118 +503,238 @@ templ ArticleList(articles []models.Article) {
 
 ---
 
-## Step 5: Implementing Rapid REST APIs & Interactive OpenAPI Docs
+## Step 6: Implementing Rapid REST APIs, Input Sanitization & OpenAPI Docs
 
-Ztatic's `rapid` package makes building REST APIs and OpenAPI documentation effortless.
+Ztatic bridges high-speed HOTW frontend rendering with enterprise-grade REST APIs.
 
-### 1. Mounting Scaffolder Controllers (`rapid.RegisterResource`)
+### 1. Mounting REST Endpoints (`rapid.RegisterResource`)
 
-In `cmd/server/main.go`, map your repository directly to a REST endpoint:
+In `cmd/server/main.go`, register your repository directly as a REST resource:
 
 ```go
-package main
+// Automatically mounts:
+// - GET    /api/articles          (offset pagination, sort, RFC 5988 Link headers)
+// - GET    /api/articles/:id      (single item envelope)
+// - POST   /api/articles          (validation & creation)
+// - PUT    /api/articles/:id      (validation & update)
+// - DELETE /api/articles/:id      (deletion)
+rapid.RegisterResource(app.Group("/api"), "articles", articleRepo)
 
-import (
-	"log"
+// Serve interactive Scalar API documentation UI at /docs
+rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
+```
 
-	"ztatic-go-framework"
-	"ztatic-go-framework/rapid"
-	"mywebsite/internal/repositories"
-)
+### 2. Standardized Response Envelopes & Pagination
 
-func RegisterAPI(app *ztatic.Engine, articleRepo *repositories.ArticleRepository) {
-	// Automatically registers GET /, GET /:id, POST /, PUT /:id, DELETE /:id
-	// and extracts struct tags (json & validate) for OpenAPI 3.0 docs!
-	rapid.RegisterResource(app.Group("/api"), "articles", articleRepo)
+All REST endpoints registered through `rapid` automatically output canonical response envelopes:
 
-	// Serve interactive Scalar API documentation UI at /docs
-	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "title": "Getting Started with Ztatic",
+      "content": "Building high performance apps in Go.",
+      "author": "Alice",
+      "created_at": "2026-09-29T10:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total_items": 45,
+    "total_pages": 3,
+    "has_next": true,
+    "has_prev": false
+  },
+  "links": {
+    "self": "/api/articles?page=1&per_page=20",
+    "first": "/api/articles?page=1&per_page=20",
+    "next": "/api/articles?page=2&per_page=20",
+    "last": "/api/articles?page=3&per_page=20"
+  },
+  "meta": {
+    "request_id": "req-1923e5904b78-b1a4-0001",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "timestamp": "2026-09-29T10:00:01Z",
+    "duration": "1.42ms"
+  }
 }
 ```
 
-Navigate to `http://localhost:8080/docs` in your browser to view the interactive Scalar API documentation!
+For custom endpoints, use Ztatic's top-level DX helpers:
+- `ztatic.OK(c, data)`
+- `ztatic.Created(c, data, "/api/articles/42")`
+- `ztatic.Paginated(c, items, meta)`
+- `ztatic.NoContent(c)`
+- `ztatic.ResponseError(c, err)`
+
+### 3. Interactive Scalar API Documentation
+
+Navigate to `http://localhost:8080/docs` in your browser. The Scalar documentation UI dynamically generates interactive documentation directly from your Go struct tags (`json`, `validate`, `db`) with live "Try It" capabilities and zero manual YAML maintenance!
 
 ---
 
-## Step 6: Adding Real-Time Updates (SSE, WebSockets & Redis Pub/Sub)
+## Step 7: Adding Real-Time Updates (SSE, WebSockets & Pub/Sub)
 
-Ztatic supports real-time event broadcasting over Server-Sent Events (SSE) and WebSockets.
+Ztatic natively pushes DOM mutations over Server-Sent Events (SSE) and WebSockets using in-memory or Redis Pub/Sub brokers.
 
 ### 1. Choosing an Event Broker (`MemoryBroker` vs. `RedisBroker`)
 
-- **`MemoryBroker`**: Ideal for single-server setups (`realtime.NewMemoryBroker()`).
-- **`RedisBroker`**: Ideal for distributed multi-node clusters (`realtime.NewRedisBroker(redisClient)` using `go-redis/v9`).
+- **`MemoryBroker`**: Thread-safe in-memory broker ideal for single-instance deployments (`realtime.NewMemoryBroker()`).
+- **`RedisBroker`**: Distributed broker for multi-instance clusters (`realtime.NewRedisBroker(redisClient)` using `go-redis/v9`).
 
-> [!TIP]
-> **Local Frontend Development (WebSocket CORS):** By default, `realtime.WebSocketHandler` enforces
-> same-origin verification to prevent Cross-Site WebSocket Hijacking (CSWSH). If your frontend
-> dev server runs on a different port (e.g., Vite on `localhost:5173`), allowlist it explicitly:
-> ```go
-> app.GET("/ws", realtime.WebSocketHandlerWithConfig(broker, realtime.WebSocketConfig{
->     AllowedOrigins: []string{"http://localhost:5173"},
-> }))
-> ```
-> Remove or restrict `AllowedOrigins` before deploying to production.
+### 2. Creating the Article Controller (`internal/controllers/article_controller.go`)
 
-### 2. Broadcasting Real-Time Turbo Streams
+Create `internal/controllers/article_controller.go`:
 
 ```go
 package controllers
 
 import (
+	"fmt"
 	"time"
 
 	"ztatic-go-framework"
 	"ztatic-go-framework/fullstack"
 	"ztatic-go-framework/realtime"
+	"ztatic-go-framework/security/audit"
 	"mywebsite/internal/models"
+	"mywebsite/internal/repositories"
 	"mywebsite/internal/views/components"
 )
 
 type ArticleController struct {
+	Repo   *repositories.ArticleRepository
 	Broker realtime.EventBroker
 }
 
 func (ac *ArticleController) Create(c *ztatic.Context) error {
-	newArticle := models.Article{
-		ID:        time.Now().Nanosecond(),
-		Title:     c.FormValue("title"),
-		Content:   c.FormValue("content"),
-		Author:    "Anonymous",
-		CreatedAt: time.Now(),
+	newArticle := &models.Article{
+		Title:       c.FormValue("title"),
+		Content:     c.FormValue("content"),
+		Author:      c.FormValue("author"),
+		SecretNotes: c.FormValue("secret_notes"),
+		CreatedAt:   time.Now(),
 	}
 
-	// 1. Broadcast Turbo Stream event to all active subscribers on "articles" topic
-	ac.Broker.Publish(c.Request().Context(), "articles", fullstack.TurboStreamItem{
+	if newArticle.Author == "" {
+		newArticle.Author = "Anonymous"
+	}
+
+	// 1. Validate payload with Zero-Trust rules
+	if err := ztatic.Validate(newArticle); err != nil {
+		return err // Automatically mapped to HTTP 422 with field details
+	}
+
+	// 2. Persist to database
+	ctx := c.Request().Context()
+	if err := ac.Repo.Insert(ctx, newArticle); err != nil {
+		return ztatic.ErrInternal("Failed to save article").WithInternal(err)
+	}
+
+	// 3. Record compliance audit entry
+	if entry := ztatic.AuditFromContext(c); entry != nil {
+		entry.WithTarget("article", fmt.Sprint(newArticle.ID), newArticle.Title).
+			WithCategory(audit.CategoryData)
+	}
+
+	// 4. Broadcast Turbo Stream DOM mutation to all SSE subscribers on "articles" topic
+	ac.Broker.Publish(ctx, "articles", fullstack.TurboStreamItem{
 		Action:    fullstack.StreamPrepend,
 		Target:    "articles-container",
-		Component: components.ArticleCard(newArticle),
+		Component: components.ArticleCard(*newArticle),
 	})
 
-	// 2. Return direct Turbo Stream response to creator
-	return fullstack.RenderTurboStream(
-		c,
-		fullstack.StreamPrepend,
-		"articles-container",
-		components.ArticleCard(newArticle),
-	)
+	// 5. If request came from Hotwire Turbo, return direct stream fragment; otherwise redirect
+	if c.Request().Header.Get("Accept") == fullstack.MIMETurboStream {
+		return fullstack.RenderTurboStream(
+			c,
+			fullstack.StreamPrepend,
+			"articles-container",
+			components.ArticleCard(*newArticle),
+		)
+	}
+
+	return c.Redirect(303, "/")
 }
 ```
 
-> [!TIP]
-> After adding your real-time controller and importing the `realtime` package, run `go mod tidy` in your project root to resolve event broker dependencies:
-> ```bash
-> go mod tidy
-> ```
-> *(Note: In strict air-gapped or offline sandbox environments, use `GOSUMDB=off go mod tidy` if your network restricts outbound DNS to Go checksum servers).*
+---
+
+## Step 8: Zero-Trust Observability (W3C Tracing, Structured Logging & Audit Trail)
+
+Ztatic provides end-to-end request visibility out of the box with zero external dependencies.
+
+### 1. W3C Distributed Tracing & Request ID Correlation (`trace`)
+
+- Every request automatically receives a timestamped, URL-safe Request ID (`req-...`) and a 16-byte W3C Trace ID.
+- The `trace` middleware enforces W3C recommendations:
+  - Parses incoming `traceparent` headers (`00-<trace_id>-<span_id>-<flags>`) and `tracestate`.
+  - Sanitizes untrusted user-supplied `X-Request-ID` headers to prevent CRLF injection and memory bloat.
+  - Automatically injects `X-Request-ID` and `traceparent` into HTTP response headers.
+- **Context Accessors**:
+  ```go
+  reqID   := ztatic.RequestIDFromContext(c)
+  traceID := ztatic.TraceIDFromContext(c)
+  spanID  := ztatic.SpanIDFromContext(c)
+  tc      := ztatic.TraceFromContext(c)
+  ```
+- **Outbound HTTP Calls**: Propagate trace context to downstream microservices using the tracing HTTP client:
+  ```go
+  client := trace.NewClient(nil) // Wraps http.DefaultClient with tracing RoundTripper
+  req, _ := http.NewRequestWithContext(c.Request().Context(), "GET", "https://api.internal/data", nil)
+  resp, err := client.Do(req)
+  ```
+
+### 2. Structured Operational Logging (`log`)
+
+- Pre-configured on standard library `log/slog`.
+- Dual-mode output: formatted color terminal output during development (`APP_ENV=development`), and high-performance NDJSON in production for Datadog, Loki, or Splunk ingestion.
+- Requests automatically log latency, method, path, IP, and status with level mapping (2xx/3xx $\rightarrow$ `INFO`, 4xx $\rightarrow$ `WARN`, 5xx $\rightarrow$ `ERROR`).
+- Enriched request logger:
+  ```go
+  logger := ztatic.LogFromContext(c)
+  logger.Info("processing order", "order_id", 123)
+  ```
+- Sensitive attributes (passwords, tokens, keys) are automatically scrubbed via `security/privacy.LogMasker`.
+- Dynamically adjust log levels at runtime without restarting:
+  ```go
+  app.SetLogLevel(log.LevelDebug)
+  ```
+
+### 3. Compliance Audit Logging (`security/audit`)
+
+- Automatically audits state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) and error responses (`status >= 400`).
+- Complies with SOC 2, HIPAA, and ISO 27001 standards.
+- Enrich audit events inside your handlers using `ztatic.AuditFromContext(c)` or `ztatic.AuditRecord(c, ...)`:
+  ```go
+  if entry := ztatic.AuditFromContext(c); entry != nil {
+      entry.WithTarget("user", "usr-42", "admin@company.com").
+            WithCategory(audit.CategoryAuth).
+            WithMetadata("mfa_verified", true)
+  }
+  ```
+
+### 4. Standardized Domain Errors (`errors`)
+
+- Decouple business logic from HTTP status codes:
+  ```go
+  return ztatic.ErrNotFound("Article does not exist").WithMetadata("article_id", id)
+  ```
+- Standard error responses conform to RFC 9457 Problem Details (`application/problem+json`).
+- In production (`APP_ENV=production`), 5xx database internals and stack traces are scrubbed and replaced with safe reference messages.
 
 ---
 
-## Step 7: Asset Management & Client Micro-Interactions
+## Step 9: Asset Management & Client Integration
 
-Ztatic uses a native Go `esbuild` binding to bundle frontend scripts and styles on the fly in sub-10ms.
+Ztatic eliminates Node.js and Webpack by bundling assets in Go via `esbuild`.
 
-### 1. CSS & Asset Pipeline (`assets/css/app.css`)
+### 1. Global CSS Styling (`assets/css/app.css`)
+
+Create `assets/css/app.css`:
 
 ```css
 body {
@@ -503,83 +747,75 @@ body {
 }
 ```
 
-### 2. Micro-Interactions with Alpine.js
+### 2. Asset Pipeline
 
-Alpine.js directives work seamlessly inside Templ components. For instance, in `internal/views/components/article_card.templ` (created in Step 4), `CreateArticleModal()` utilizes Alpine.js for modal state and event handling:
+`fullstack.MountAssets(app.Echo, fs, isDev)` serves assets with live reloading during development, and from Go's embedded filesystem with SHA-256 content hashing in production.
 
-```html
-templ CreateArticleModal() {
-	<div x-data="{ open: false }">
-		<button @click="open = true" class="bg-blue-600 text-white px-4 py-2 rounded">
-			+ New Article
-		</button>
+---
 
-		<div x-show="open" x-cloak class="fixed inset-0 bg-black/50 flex items-center justify-center">
-			<div @click.away="open = false" class="bg-white p-6 rounded-lg w-96 shadow-xl">
-				<h3 class="text-lg font-bold mb-4">Create New Article</h3>
-				<form action="/articles" method="POST" @submit="open = false">
-					<!-- Note: In browser sessions, modern browsers send Sec-Fetch-Site: same-origin automatically. -->
-					<!-- To explicitly bind CSRF tokens in forms, you can include fullstack.CSRFField(c) -->
-					<input type="text" name="title" placeholder="Title" required class="w-full mb-3 p-2 border rounded"/>
-					<textarea name="content" placeholder="Content" required class="w-full mb-3 p-2 border rounded"></textarea>
-					<div class="flex justify-end space-x-2">
-						<button type="button" @click="open = false" class="px-4 py-2 border rounded">Cancel</button>
-						<button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
-					</div>
-				</form>
-			</div>
-		</div>
-	</div>
-}
-```
+## Step 10: Assembling the Full Application Server (`cmd/server/main.go`)
 
-### 3. Assembling the Application Server (`cmd/server/main.go`)
-
-Now tie all components together in `cmd/server/main.go`—mounting static assets, OpenAPI documentation, generic database repositories, and real-time event brokers.
-
-#### Embedding Static Assets (`dist.go`)
-
-Go's standard library `//go:embed` directive cannot reference parent directories (`..`). Because `dist/` is generated at the project root while `main.go` resides in `cmd/server/`, `ztatic new` creates a root-level `dist.go` to cleanly embed the assets into the root package:
-
-```go
-// dist.go (located in project root)
-package mywebsite
-
-import "embed"
-
-// DistFS embeds compiled static assets for zero-dependency single-binary deployment
-//go:embed all:dist
-var DistFS embed.FS
-```
-
-In `cmd/server/main.go`, we import our root module `mywebsite` and mount the embedded sub-filesystem:
+Now tie all components together in `cmd/server/main.go`:
 
 ```go
 package main
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"os"
 
+	_ "modernc.org/sqlite" // Pure-Go SQLite driver
+
 	"ztatic-go-framework"
+	"ztatic-go-framework/data"
 	"ztatic-go-framework/fullstack"
 	"ztatic-go-framework/rapid"
 	"ztatic-go-framework/realtime"
 	"mywebsite"
+	"mywebsite/db/migrations"
+	"mywebsite/internal/config"
 	"mywebsite/internal/controllers"
-	"mywebsite/internal/models"
 	"mywebsite/internal/repositories"
 	"mywebsite/internal/views/components"
 	"mywebsite/internal/views/layouts"
 )
 
 func main() {
-	// 1. Initialize Zero-Trust security engine
+	// 1. Fail-fast configuration loading with startup validation
+	cfg := ztatic.MustLoadConfig[config.AppConfig]()
+
+	// 2. Initialize Zero-Trust security engine
 	app := ztatic.NewSecure()
 
-	// 2. Mount static asset pipeline (development live-reload vs production single-binary embed)
-	isDev := os.Getenv("APP_ENV") == "development"
+	// Configure field-level AES-256 encryption key
+	if !cfg.CipherKey.IsEmpty() {
+		_, _ = app.SetCipherKey([]byte(cfg.CipherKey.Expose()))
+	}
+
+	// 3. Initialize Database Engine & run embedded schema migrations
+	dbEngine, err := data.NewDBEngine("sqlite", cfg.DatabaseDSN)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer dbEngine.Close()
+
+	migrator := data.NewMigrationEngine(dbEngine.SQL)
+	if err := migrator.RunMigrations(migrations.MigrationFS, ".", "sqlite3"); err != nil {
+		log.Fatalf("Database schema migration failed: %v", err)
+	}
+
+	// 4. Initialize Data Repositories & Real-Time Broker
+	articleRepo := repositories.NewArticleRepository(dbEngine)
+	broker := realtime.NewMemoryBroker()
+	articleCtrl := &controllers.ArticleController{
+		Repo:   articleRepo,
+		Broker: broker,
+	}
+
+	// 5. Mount static assets (development live-reload vs production single-binary embed)
+	isDev := ztatic.ActiveProfile().IsDevelopment()
 	if isDev {
 		fullstack.MountAssets(app.Echo, os.DirFS("dist"), true)
 	} else if distSub, err := fs.Sub(mywebsite.DistFS, "dist"); err == nil {
@@ -588,98 +824,87 @@ func main() {
 		fullstack.MountAssets(app.Echo, os.DirFS("dist"), false)
 	}
 
-	// 3. Initialize data tier & event broker
-	broker := realtime.NewMemoryBroker()
-	articleRepo := repositories.NewArticleRepository(nil)
-	articleController := &controllers.ArticleController{Broker: broker}
-
-	// 4. Register application routes
+	// 6. Register HOTW Web Routes
 	app.GET("/", func(c *ztatic.Context) error {
-		sampleArticles := []models.Article{
-			{ID: 1, Title: "First Article", Content: "Hello from Ztatic!", Author: "Alice"},
+		ctx := c.Request().Context()
+		articles, err := articleRepo.Find(ctx, data.OrderByDesc("created_at"), data.Limit(20))
+		if err != nil {
+			return err
 		}
-		return fullstack.Render(c, 200, layouts.AppLayout(components.ArticleList(sampleArticles)))
+		return fullstack.RenderLayout(c, 200, layouts.AppLayout, components.ArticleList(articles))
 	})
 	app.GET("/sse", realtime.SSEHandler(broker))
-	app.POST("/articles", articleController.Create)
+	app.POST("/articles", articleCtrl.Create)
 
-	// 5. Mount REST CRUD & OpenAPI Scalar docs
+	// 7. Mount Scaffolder REST API & Interactive OpenAPI Scalar Docs
 	rapid.RegisterResource(app.Group("/api"), "articles", articleRepo)
 	rapid.DefaultOpenAPIGenerator.ServeDocs(app.Echo, "/docs")
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("Ztatic application starting on :%s...\n", port)
-	log.Fatal(app.Start(":" + port))
+	// 8. Start HTTP Server
+	log.Printf("🚀 %s starting on :%s (profile: %s)...\n", cfg.AppName, cfg.Port, ztatic.ActiveProfile())
+	log.Fatal(app.Start(":" + cfg.Port))
 }
 ```
 
-> [!TIP]
-> **WAF Body Limit:** `NewSecure()` enforces a default **128 KB** maximum request body for WAF
-> inspection. If your application accepts larger payloads (document imports, image uploads),
-> configure the limit right after `ztatic.NewSecure()` and before `app.Start()`:
-> ```go
-> app := ztatic.NewSecure()
-> app.SetMaxBodySize(4 * 1024 * 1024) // Allow up to 4 MB
-> ```
-
 ---
 
-## Step 8: Development Workflow (Live Reload)
+## Step 11: Development Workflow (Live Reload)
 
-During active development, run:
+Start active development with:
 
 ```bash
 ztatic dev
 ```
 
-### What happens in Dev Mode?
-1. Monitors `.go`, `.templ`, `.css`, and `.js` files using `fsnotify` with a 100ms debouncer.
-2. Automatically compiles modified Templ components (`templ generate`).
-3. Executes sub-10ms `esbuild` bundling for CSS and JavaScript.
-4. Auto-rebuilds and restarts the Go application process seamlessly.
+### What Happens in Dev Mode?
+1. Monitors `.go`, `.templ`, `.css`, `.js`, and `.env` files using `fsnotify` with a 100ms debouncer.
+2. Compiles modified Templ components (`templ generate`).
+3. Executes sub-10ms `esbuild` bundling for CSS and JavaScript into `dist/`.
+4. Auto-rebuilds and restarts the Go application binary seamlessly.
+5. Emits a live reload event over SSE to refresh browser tabs automatically.
 
 ---
 
-## Step 9: Production Build & Single-Binary Deployment
+## Step 12: Production Build & Single-Binary Deployment
 
-To build your application for production distribution:
+To build an optimized, standalone executable for production:
 
 ```bash
 ztatic build
 ```
 
 ### The 4-Step Production Build Pipeline
-1. **Templ Compilation**: Compiles `.templ` files into Go code.
-2. **Asset Minification**: `esbuild` minifies JS/CSS targeting ES2022.
-3. **Content Hashing**: Generates SHA-256 asset content hashes and `manifest.json`.
-4. **Single-Binary Artifact**: Executes `go build -ldflags="-s -w" -trimpath` embedding all assets into a single static binary in `bin/server`.
+1. **Templ Compilation**: Compiles `.templ` files into optimized Go code.
+2. **Asset Minification**: `esbuild` bundles and minifies JS/CSS targeting ES2022.
+3. **Content Hashing**: Generates SHA-256 asset content hashes and `dist/manifest.json`.
+4. **Single-Binary Compilation**: Executes `go build -ldflags="-s -w" -trimpath` embedding assets via root `dist.go` (`//go:embed all:dist`).
 
 ### Deploying the Binary
 
-Deploying to production requires zero external runtime dependencies or static folder uploads because `dist/` is compiled directly into the binary via root `dist.go` (`//go:embed all:dist`):
+Deploying requires zero external runtime dependencies, node packages, or static asset folders:
 
 ```bash
-# Copy binary to deployment host
+# Copy binary to production server
 scp bin/server user@your-server.com:/opt/mywebsite/
 
-# Run the single binary on server (optionally override port with PORT env)
-PORT=80 /opt/mywebsite/server
+# Run the single binary in production
+APP_ENV=production PORT=80 /opt/mywebsite/server
 ```
 
 ---
 
 ## Summary Checklist
 
-- [x] Installed `ztatic` CLI tool.
+- [x] Installed `ztatic` CLI and verified environment.
 - [x] Scaffolded project with `ztatic new mywebsite`.
-- [x] Learned framework module layout (`ztatic`, `fullstack`, `realtime`, `security`, `data`, `rapid`, `echo`).
-- [x] Built data access layer with `data.DBEngine`, `squirrel`, `goose`, and `BaseRepository`.
-- [x] Created Templ views & master layout shell.
-- [x] Auto-generated OpenAPI 3.0 documentation & Scalar UI at `/docs`.
-- [x] Added real-time DOM updates via SSE, WebSockets, and Pub/Sub brokers.
-- [x] Built single self-contained binary artifact with `ztatic build`.
+- [x] Mastered the 13 core framework packages (`ztatic`, `config`, `trace`, `data`, `rapid`, `validation`, `response`, `errors`, `log`, `security`, `fullstack`, `realtime`, `echo`).
+- [x] Built type-safe environment configuration with 4-tier dotenv cascading and `SecretString`.
+- [x] Set up database connection pool with `data.NewDBEngine`, embedded Goose SQL migrations, and AES-256 field encryption.
+- [x] Implemented data access using `data.BaseRepository[T]`, fluent query helpers, and nested transactions with savepoints.
+- [x] Created type-safe Templ views with smart layout unwrapping and Alpine.js micro-interactions.
+- [x] Auto-generated OpenAPI 3.0 documentation and Scalar UI at `/docs`.
+- [x] Added real-time DOM mutations via SSE and Turbo Streams without client JavaScript.
+- [x] Leveraged W3C distributed tracing, structured logging, and compliance audit ledgers.
+- [x] Built and deployed a single, self-contained static binary with `ztatic build`.
 
-Congratulations! You have successfully built a full-stack, secure, real-time web application using the Ztatic framework!
+Congratulations! You have mastered the full Ztatic framework ecosystem and are ready to build enterprise-grade web applications in Go!
