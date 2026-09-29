@@ -175,50 +175,63 @@ func (s *DevServer) watchLoop() {
 	}
 }
 
-func (s *DevServer) triggerRebuild(triggerFile string) {
-	fmt.Printf("\n⚡ Change detected (%s)\n", triggerFile)
-	
-	ext := filepath.Ext(triggerFile)
-	
-	if ext == ".css" || ext == ".js" || ext == ".ts" {
-		fmt.Println("📦 Bundling assets (esbuild)...")
-		
-		// Find entry points dynamically or use defaults
-		var entryPoints []string
-		filepath.Walk("assets", func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				e := filepath.Ext(path)
-				if e == ".js" || e == ".ts" || e == ".css" {
-					entryPoints = append(entryPoints, path)
-				}
-			}
-			return nil
-		})
-
-		if len(entryPoints) > 0 {
-			opts := fullstack.BundlerOptions{
-				EntryPoints:  entryPoints,
-				OutDir:       "dist",
-				IsProduction: false,
-			}
-			_, err := fullstack.BundleAssets(opts)
-			if err != nil {
-				fmt.Printf("❌ Asset bundling failed: %v\n", err)
+func (s *DevServer) bundleAssets() {
+	fmt.Println("📦 Bundling assets (esbuild)...")
+	var entryPoints []string
+	filepath.Walk("assets", func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			e := filepath.Ext(path)
+			if e == ".js" || e == ".ts" || e == ".css" {
+				entryPoints = append(entryPoints, path)
 			}
 		}
-	} else if ext == ".templ" {
-		fmt.Println("🔨 Compiling components (templ generate)...")
-		cmd := exec.Command("templ", "generate")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("❌ Templ compilation failed: %v\n", err)
+		return nil
+	})
+
+	if len(entryPoints) > 0 {
+		opts := fullstack.BundlerOptions{
+			EntryPoints:  entryPoints,
+			OutDir:       "dist",
+			IsProduction: false,
+		}
+		_, err := fullstack.BundleAssets(opts)
+		if err != nil {
+			fmt.Printf("❌ Asset bundling failed: %v\n", err)
 		}
 	}
+}
 
-	// For .go files, .env files, or initial run, restart the server
+func (s *DevServer) generateTempl() {
+	fmt.Println("🔨 Compiling components (templ generate)...")
+	cmd := exec.Command("templ", "generate")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("❌ Templ compilation failed: %v\n", err)
+	}
+}
+
+func (s *DevServer) triggerRebuild(triggerFile string) {
+	fmt.Printf("\n⚡ Change detected (%s)\n", triggerFile)
+
+	if triggerFile == "init" {
+		s.bundleAssets()
+		s.generateTempl()
+		s.restartServerProcess()
+		return
+	}
+
+	ext := filepath.Ext(triggerFile)
+
+	if ext == ".css" || ext == ".js" || ext == ".ts" {
+		s.bundleAssets()
+	} else if ext == ".templ" {
+		s.generateTempl()
+	}
+
+	// For .go files or .env files, restart the server
 	isEnvFile := strings.HasPrefix(filepath.Base(triggerFile), ".env")
-	if ext == ".go" || isEnvFile || triggerFile == "init" {
+	if ext == ".go" || isEnvFile {
 		s.restartServerProcess()
 	}
 

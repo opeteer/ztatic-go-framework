@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
+	"time"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/labstack/echo/v5"
@@ -249,6 +251,8 @@ func (r *BaseRepository[T]) Insert(ctx context.Context, entity *T) error {
 		return errors.New("ztatic/data: database executor is uninitialized")
 	}
 
+	populateDefaultTimestamps(entity)
+
 	cols, vals, err := ExtractValues(entity, r.Metadata, true)
 	if err != nil {
 		return err
@@ -288,6 +292,10 @@ func (r *BaseRepository[T]) InsertMany(ctx context.Context, entities []*T) error
 	exec := r.getExecutor(ctx)
 	if exec == nil {
 		return errors.New("ztatic/data: database executor is uninitialized")
+	}
+
+	for _, entity := range entities {
+		populateDefaultTimestamps(entity)
 	}
 
 	firstCols, _, err := ExtractValues(entities[0], r.Metadata, true)
@@ -570,3 +578,22 @@ func (r *BaseRepository[T]) FindAllPaginated(c *echo.Context, p response.PagePar
 	}
 	return items, meta.TotalItems, nil
 }
+
+func populateDefaultTimestamps(entity any) {
+	if entity == nil {
+		return
+	}
+	val := reflect.ValueOf(entity)
+	if val.Kind() == reflect.Pointer && !val.IsNil() {
+		elem := val.Elem()
+		if elem.Kind() == reflect.Struct {
+			createdField := elem.FieldByName("CreatedAt")
+			if createdField.IsValid() && createdField.CanSet() && createdField.Type() == reflect.TypeOf(time.Time{}) {
+				if t, ok := createdField.Interface().(time.Time); ok && t.IsZero() {
+					createdField.Set(reflect.ValueOf(time.Now()))
+				}
+			}
+		}
+	}
+}
+

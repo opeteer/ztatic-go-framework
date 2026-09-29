@@ -82,9 +82,11 @@ import (
 
 // AppConfig defines the type-safe environment configuration schema for this application.
 type AppConfig struct {
-	AppName string              ` + "`" + `env:"APP_NAME" envDefault:"myapp" validate:"required"` + "`" + `
-	Port    string              ` + "`" + `env:"PORT" envDefault:"8080" validate:"required"` + "`" + `
-	Secret  ztatic.SecretString ` + "`" + `env:"AUTH_SECRET" envDefault:"dev-secret-key-must-be-changed-in-production-min-32-bytes"` + "`" + `
+	AppName     string              ` + "`" + `env:"APP_NAME" envDefault:"myapp" validate:"required"` + "`" + `
+	Port        string              ` + "`" + `env:"PORT" envDefault:"8080" validate:"required"` + "`" + `
+	DatabaseDSN string              ` + "`" + `env:"DATABASE_DSN" envDefault:"app.db" validate:"required"` + "`" + `
+	CipherKey   ztatic.SecretString ` + "`" + `env:"ZTATIC_CIPHER_KEY" envDefault:"01234567890123456789012345678901"` + "`" + `
+	AuthSecret  ztatic.SecretString ` + "`" + `env:"AUTH_SECRET" envDefault:"dev-secret-key-must-be-changed-in-production-min-32-bytes" validate:"required,min=32"` + "`" + `
 }
 `
 		if err := os.WriteFile(filepath.Join(baseDir, "internal/config", "config.go"), []byte(configGoContent), 0644); err != nil {
@@ -94,12 +96,16 @@ type AppConfig struct {
 		// Generate .env and .env.example
 		envContent := fmt.Sprintf(`APP_NAME=%s
 PORT=8080
+DATABASE_DSN=app.db
+ZTATIC_CIPHER_KEY=01234567890123456789012345678901
 AUTH_SECRET=dev-secret-key-must-be-changed-in-production-min-32-bytes
 `, moduleName)
 		_ = os.WriteFile(filepath.Join(baseDir, ".env"), []byte(envContent), 0644)
 
 		envExampleContent := `APP_NAME=myapp
 PORT=8080
+DATABASE_DSN=app.db
+ZTATIC_CIPHER_KEY=01234567890123456789012345678901
 AUTH_SECRET=your-production-secret-must-be-at-least-32-bytes
 `
 		_ = os.WriteFile(filepath.Join(baseDir, ".env.example"), []byte(envExampleContent), 0644)
@@ -115,13 +121,15 @@ import (
 	"ztatic-go-framework/fullstack"
 	"ztatic-go-framework/log"
 	"%s"
+	"%s/internal/config"
 )
 
 func main() {
+	cfg := ztatic.MustLoadConfig[config.AppConfig]()
 	app := ztatic.NewSecure()
 
 	// Mount assets: in development, use os.DirFS with live reload; in production, use root DistFS embed
-	isDev := os.Getenv("APP_ENV") == "development"
+	isDev := ztatic.ActiveProfile().IsDevelopment()
 	if isDev {
 		fullstack.MountAssets(app.Echo, os.DirFS("dist"), true)
 	} else if distSub, err := fs.Sub(%s.DistFS, "dist"); err == nil {
@@ -131,19 +139,15 @@ func main() {
 	}
 	
 	app.GET("/", func(c *ztatic.Context) error {
-		return c.String(200, "Welcome to Ztatic!")
+		return c.String(200, "Welcome to "+cfg.AppName+"!")
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Info("Ztatic application starting", "port", port)
-	if err := app.Start(":" + port); err != nil {
+	log.Info("Ztatic application starting", "app", cfg.AppName, "port", cfg.Port)
+	if err := app.Start(":" + cfg.Port); err != nil {
 		log.Error("server stopped", "error", err)
 	}
 }
-`, moduleName, moduleName)
+`, moduleName, moduleName, moduleName)
 		if err := os.WriteFile(filepath.Join(baseDir, "cmd/server", "main.go"), []byte(mainContent), 0644); err != nil {
 			fmt.Printf("Error writing main.go: %v\n", err)
 		}
@@ -224,6 +228,11 @@ import (
 
 		// Generate go.mod
 		modContent := fmt.Sprintf("module %s\n\ngo 1.21\n\nrequire (\n\tgithub.com/a-h/templ v0.3.1020\n\tztatic-go-framework v0.0.0\n)\n\nreplace ztatic-go-framework => %s\n", moduleName, replacePath)
+		if frameworkDir != "" {
+			if _, err := os.Stat(filepath.Join(frameworkDir, "echo")); err == nil {
+				modContent += fmt.Sprintf("\nreplace github.com/labstack/echo/v5 => %s/echo\n", replacePath)
+			}
+		}
 		if err := os.WriteFile(filepath.Join(baseDir, "go.mod"), []byte(modContent), 0644); err != nil {
 			fmt.Printf("Error writing go.mod: %v\n", err)
 		}

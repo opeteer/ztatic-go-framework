@@ -140,4 +140,24 @@ func CSRFField(c *echo.Context) string {
 	return fmt.Sprintf(`<input type="hidden" name="_csrf" value="%s" />`, html.EscapeString(token))
 }
 
+type csrfContextKey struct{}
+
+// CSRFTokenCtx retrieves the current CSRF token from the Go request context.
+// Designed for seamless usage inside Templ components via the component's implicit ctx parameter.
+func CSRFTokenCtx(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if token, ok := ctx.Value(csrfContextKey{}).(string); ok {
+		return token
+	}
+	return ""
+}
+
+// CSRFFieldCtx renders a hidden HTML input field containing the CSRF token from the context.
+func CSRFFieldCtx(ctx context.Context) string {
+	token := CSRFTokenCtx(ctx)
+	return fmt.Sprintf(`<input type="hidden" name="_csrf" value="%s" />`, html.EscapeString(token))
+}
+
 
