@@ -210,6 +210,13 @@ func (e *Entry) WithContext(reqID, method, path, route, ip, userAgent string) *E
 	return e
 }
 
+// WithTrace sets distributed trace and span IDs on the audit context.
+func (e *Entry) WithTrace(traceID, spanID string) *Entry {
+	e.Context.TraceID = traceID
+	e.Context.SpanID = spanID
+	return e
+}
+
 // WithDiff records state changes before and after an operation.
 func (e *Entry) WithDiff(before, after map[string]any) *Entry {
 	e.Changes.Before = before

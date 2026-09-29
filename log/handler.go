@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"ztatic-go-framework/security/privacy"
+	"ztatic-go-framework/trace"
 )
 
 // Standard context keys for request and tracing correlation
@@ -52,8 +53,13 @@ func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	var extraAttrs []slog.Attr
 
+	// Extract from unified trace.TraceContext if present
+	tc := trace.FromContext(ctx)
+
 	// Extract standard typed context keys
-	if reqID := ctx.Value(ContextKeyRequestID); reqID != nil {
+	if tc.RequestID != "" {
+		extraAttrs = append(extraAttrs, slog.String("req_id", tc.RequestID))
+	} else if reqID := ctx.Value(ContextKeyRequestID); reqID != nil {
 		extraAttrs = append(extraAttrs, slog.String("req_id", fmt.Sprint(reqID)))
 	} else if reqID := ctx.Value("request_id"); reqID != nil {
 		extraAttrs = append(extraAttrs, slog.String("req_id", fmt.Sprint(reqID)))
@@ -61,13 +67,17 @@ func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 		extraAttrs = append(extraAttrs, slog.String("req_id", fmt.Sprint(reqID)))
 	}
 
-	if traceID := ctx.Value(ContextKeyTraceID); traceID != nil {
+	if tc.TraceID != "" {
+		extraAttrs = append(extraAttrs, slog.String("trace_id", tc.TraceID))
+	} else if traceID := ctx.Value(ContextKeyTraceID); traceID != nil {
 		extraAttrs = append(extraAttrs, slog.String("trace_id", fmt.Sprint(traceID)))
 	} else if traceID := ctx.Value("trace_id"); traceID != nil {
 		extraAttrs = append(extraAttrs, slog.String("trace_id", fmt.Sprint(traceID)))
 	}
 
-	if spanID := ctx.Value(ContextKeySpanID); spanID != nil {
+	if tc.SpanID != "" {
+		extraAttrs = append(extraAttrs, slog.String("span_id", tc.SpanID))
+	} else if spanID := ctx.Value(ContextKeySpanID); spanID != nil {
 		extraAttrs = append(extraAttrs, slog.String("span_id", fmt.Sprint(spanID)))
 	} else if spanID := ctx.Value("span_id"); spanID != nil {
 		extraAttrs = append(extraAttrs, slog.String("span_id", fmt.Sprint(spanID)))

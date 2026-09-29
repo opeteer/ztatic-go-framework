@@ -10,6 +10,7 @@ import (
 	"ztatic-go-framework/security/session"
 	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
+	"ztatic-go-framework/trace"
 )
 
 // Config defines the top-level configuration for the Ztatic engine.
@@ -19,6 +20,9 @@ type Config struct {
 
 	// Security contains the web security suite configuration.
 	Security web.Config
+
+	// Trace contains distributed tracing and request correlation configuration.
+	Trace trace.Config
 
 	// Log contains the structured logging engine configuration.
 	Log log.Config
@@ -41,6 +45,7 @@ func DefaultConfig() Config {
 	return Config{
 		Profile:  config.ActiveProfile(),
 		Security: web.DefaultConfig(),
+		Trace:    trace.DefaultConfig(),
 		Log:      log.DefaultConfig(),
 		Error:    errors.DefaultConfig(),
 		Response: response.DefaultConfig(),
