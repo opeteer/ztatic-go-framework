@@ -20,6 +20,7 @@ import (
 	"ztatic-go-framework/security/session"
 	"ztatic-go-framework/security/token"
 	"ztatic-go-framework/security/web"
+	"ztatic-go-framework/trace"
 	"ztatic-go-framework/validation"
 )
 
@@ -171,6 +172,9 @@ type CookieStore = session.CookieStore
 type Logger = *slog.Logger
 type LogLevel = slog.Level
 type LogConfig = log.Config
+
+type TraceContext = trace.TraceContext
+type TraceConfig = trace.Config
 
 type AppError = errors.Error
 type FieldViolation = errors.FieldViolation
@@ -334,6 +338,38 @@ func LogFromContext(c *Context) *slog.Logger {
 	return log.Default()
 }
 
+// TraceFromContext retrieves the distributed trace context from Echo context.
+func TraceFromContext(c *Context) trace.TraceContext {
+	if c != nil {
+		return trace.FromContext(c.Request().Context())
+	}
+	return trace.TraceContext{}
+}
+
+// RequestIDFromContext retrieves the request correlation ID from Echo context.
+func RequestIDFromContext(c *Context) string {
+	if c != nil {
+		return trace.RequestID(c.Request().Context())
+	}
+	return ""
+}
+
+// TraceIDFromContext retrieves the distributed trace ID from Echo context.
+func TraceIDFromContext(c *Context) string {
+	if c != nil {
+		return trace.TraceID(c.Request().Context())
+	}
+	return ""
+}
+
+// SpanIDFromContext retrieves the span ID from Echo context.
+func SpanIDFromContext(c *Context) string {
+	if c != nil {
+		return trace.SpanID(c.Request().Context())
+	}
+	return ""
+}
+
 // TokenFromContext retrieves the verified cryptographic token from the request context.
 func TokenFromContext(c *Context) *token.Token {
 	return token.FromContext(c)
@@ -411,6 +447,7 @@ func NewWithConfig(cfg Config) *Engine {
 
 	// Core robust middleware
 	e.Use(middleware.Recover())
+	e.Use(trace.MiddlewareWithConfig(cfg.Trace))
 	e.Use(response.MiddlewareWithConfig(cfg.Response))
 
 	// Phase 1: Structured Request Logger with context correlation and privacy scrubbing
@@ -496,6 +533,7 @@ func New() *Engine {
 	e := echo.New()
 	e.HTTPErrorHandler = errors.NewHTTPErrorHandler(errors.DefaultConfig())
 	e.Use(middleware.Recover())
+	e.Use(trace.Middleware())
 	e.Use(response.Middleware())
 	e.Validator = rapid.NewStructValidator()
 	return &Engine{Echo: e}

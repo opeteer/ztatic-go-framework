@@ -60,6 +60,7 @@ type Error struct {
 	Details   []FieldViolation `json:"details,omitempty"`
 	Metadata  map[string]any   `json:"metadata,omitempty"`
 	RequestID string           `json:"request_id,omitempty"`
+	TraceID   string           `json:"trace_id,omitempty"`
 	Stack     string           `json:"stack,omitempty"`
 }
 
@@ -185,6 +186,13 @@ func (e *Error) WithMetadata(key string, value any) *Error {
 func (e *Error) WithRequestID(reqID string) *Error {
 	clone := e.Clone()
 	clone.RequestID = reqID
+	return clone
+}
+
+// WithTraceID sets the distributed trace ID on the error.
+func (e *Error) WithTraceID(traceID string) *Error {
+	clone := e.Clone()
+	clone.TraceID = traceID
 	return clone
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"ztatic-go-framework/errors"
+	"ztatic-go-framework/trace"
 )
 
 // Option specifies customization options for response envelopes.
@@ -16,6 +17,7 @@ type envelopeOptions struct {
 	links      *Links
 	headers    map[string]string
 	reqID      string
+	traceID    string
 }
 
 // WithMeta adds a single custom key-value pair to response metadata.
@@ -64,6 +66,13 @@ func WithRequestID(reqID string) Option {
 	}
 }
 
+// WithTraceID explicitly sets the distributed trace ID on the envelope.
+func WithTraceID(traceID string) Option {
+	return func(o *envelopeOptions) {
+		o.traceID = traceID
+	}
+}
+
 // OK renders a standard HTTP 200 envelope with the provided data payload.
 func OK(c *echo.Context, data any, opts ...Option) error {
 	return JSON(c, http.StatusOK, data, opts...)
@@ -108,8 +117,14 @@ func Paginated[T any](c *echo.Context, items []T, meta *PaginationMeta, opts ...
 		SetLinkHeader(c, links)
 	}
 
+	traceID := envOpts.traceID
+	if traceID == "" {
+		traceID = resolveTraceID(c)
+	}
+
 	respMeta := &ResponseMeta{
 		RequestID: reqID,
+		TraceID:   traceID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Duration:  resolveDuration(c),
 		Extra:     envOpts.customMeta,
@@ -136,8 +151,14 @@ func CursorPaginated[T any](c *echo.Context, items []T, meta *CursorMeta, opts .
 		reqID = resolveRequestID(c)
 	}
 
+	traceID := envOpts.traceID
+	if traceID == "" {
+		traceID = resolveTraceID(c)
+	}
+
 	respMeta := &ResponseMeta{
 		RequestID: reqID,
+		TraceID:   traceID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Duration:  resolveDuration(c),
 		Extra:     envOpts.customMeta,
@@ -163,8 +184,14 @@ func JSON(c *echo.Context, status int, data any, opts ...Option) error {
 		reqID = resolveRequestID(c)
 	}
 
+	traceID := envOpts.traceID
+	if traceID == "" {
+		traceID = resolveTraceID(c)
+	}
+
 	respMeta := &ResponseMeta{
 		RequestID: reqID,
+		TraceID:   traceID,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Duration:  resolveDuration(c),
 		Extra:     envOpts.customMeta,
@@ -189,6 +216,9 @@ func Error(c *echo.Context, err error) error {
 	if appErr.RequestID == "" {
 		appErr.RequestID = resolveRequestID(c)
 	}
+	if appErr.TraceID == "" {
+		appErr.TraceID = resolveTraceID(c)
+	}
 	return errors.Render(c, appErr, errors.DefaultConfig())
 }
 
@@ -204,17 +234,51 @@ func resolveRequestID(c *echo.Context) string {
 	if c == nil {
 		return ""
 	}
+	if req := c.Request(); req != nil {
+		if reqID := trace.RequestID(req.Context()); reqID != "" {
+			return reqID
+		}
+	}
 	if reqID := c.Response().Header().Get(echo.HeaderXRequestID); reqID != "" {
 		return reqID
 	}
 	if reqID := c.Response().Header().Get("X-Request-Id"); reqID != "" {
 		return reqID
 	}
-	if reqID := c.Request().Header.Get(echo.HeaderXRequestID); reqID != "" {
-		return reqID
+	if req := c.Request(); req != nil {
+		if reqID := req.Header.Get(echo.HeaderXRequestID); reqID != "" {
+			return reqID
+		}
 	}
 	if val, ok := c.Get("request_id").(string); ok && val != "" {
 		return val
+	}
+	return ""
+}
+
+func resolveTraceID(c *echo.Context) string {
+	if c == nil {
+		return ""
+	}
+	if req := c.Request(); req != nil {
+		if traceID := trace.TraceID(req.Context()); traceID != "" {
+			return traceID
+		}
+	}
+	if val, ok := c.Get("trace_id").(string); ok && val != "" {
+		return val
+	}
+	if tp := c.Response().Header().Get(trace.HeaderTraceparent); tp != "" {
+		if tID, _, _, err := trace.ParseTraceparent(tp); err == nil {
+			return tID
+		}
+	}
+	if req := c.Request(); req != nil {
+		if tp := req.Header.Get(trace.HeaderTraceparent); tp != "" {
+			if tID, _, _, err := trace.ParseTraceparent(tp); err == nil {
+				return tID
+			}
+		}
 	}
 	return ""
 }

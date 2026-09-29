@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"ztatic-go-framework/security/privacy"
+	"ztatic-go-framework/trace"
 )
 
 // ContextKeyAuditEntry is the Echo context key holding the active *Entry.
@@ -182,10 +183,14 @@ func AuditWithConfig(cfg AuditConfig) echo.MiddlewareFunc {
 			startTime := time.Now()
 			req := c.Request()
 
-			// Extract Request ID
-			reqID := c.Response().Header().Get(echo.HeaderXRequestID)
+			// Extract Request ID and Trace Context
+			tc := trace.FromContext(req.Context())
+			reqID := tc.RequestID
 			if reqID == "" {
-				reqID = req.Header.Get(echo.HeaderXRequestID)
+				reqID = c.Response().Header().Get(echo.HeaderXRequestID)
+				if reqID == "" {
+					reqID = req.Header.Get(echo.HeaderXRequestID)
+				}
 			}
 
 			// Resolve canonical action and actor
@@ -194,7 +199,8 @@ func AuditWithConfig(cfg AuditConfig) echo.MiddlewareFunc {
 
 			entry := NewEntry(action).
 				WithActorStruct(actor).
-				WithContext(reqID, req.Method, req.URL.Path, c.Path(), c.RealIP(), req.UserAgent())
+				WithContext(reqID, req.Method, req.URL.Path, c.Path(), c.RealIP(), req.UserAgent()).
+				WithTrace(tc.TraceID, tc.SpanID)
 
 			// Inspect & sanitize request body if enabled
 			if cfg.IncludeRequestBody && req.Body != nil && req.ContentLength > 0 && req.ContentLength <= cfg.MaxBodySize {

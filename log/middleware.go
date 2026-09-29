@@ -12,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"ztatic-go-framework/trace"
 )
 
 var reqCounter uint64
@@ -85,8 +86,12 @@ func RequestLoggerWithConfig(cfg RequestLoggerConfig) echo.MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 
-			// 1. Resolve or generate Request ID
-			reqID := req.Header.Get(echo.HeaderXRequestID)
+			// 1. Resolve or generate Request ID and Trace metadata
+			tc := trace.FromContext(req.Context())
+			reqID := tc.RequestID
+			if reqID == "" {
+				reqID = req.Header.Get(echo.HeaderXRequestID)
+			}
 			if reqID == "" && !cfg.DisableRequestID {
 				reqID = generateRequestID()
 				req.Header.Set(echo.HeaderXRequestID, reqID)
@@ -102,11 +107,18 @@ func RequestLoggerWithConfig(cfg RequestLoggerConfig) echo.MiddlewareFunc {
 			}
 
 			// 3. Create request-scoped child logger with correlation metadata
-			reqLogger := base.With(
+			loggerAttrs := []any{
 				slog.String("req_id", reqID),
 				slog.String("method", req.Method),
 				slog.String("uri", req.URL.RequestURI()),
-			)
+			}
+			if tc.TraceID != "" {
+				loggerAttrs = append(loggerAttrs, slog.String("trace_id", tc.TraceID))
+			}
+			if tc.SpanID != "" {
+				loggerAttrs = append(loggerAttrs, slog.String("span_id", tc.SpanID))
+			}
+			reqLogger := base.With(loggerAttrs...)
 			if !cfg.DisableRemoteIP {
 				reqLogger = reqLogger.With(slog.String("ip", c.RealIP()))
 			}

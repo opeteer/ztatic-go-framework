@@ -25,6 +25,7 @@ type ErrorBody struct {
 	Details   []FieldViolation `json:"details,omitempty"`
 	Metadata  map[string]any   `json:"metadata,omitempty"`
 	RequestID string           `json:"request_id,omitempty"`
+	TraceID   string           `json:"trace_id,omitempty"`
 	Internal  string           `json:"internal,omitempty"`
 	Stack     string           `json:"stack,omitempty"`
 	Timestamp string           `json:"timestamp"`
@@ -40,6 +41,7 @@ type ProblemDetails struct {
 	Code          string           `json:"code"`
 	InvalidParams []FieldViolation `json:"invalid_params,omitempty"`
 	RequestID     string           `json:"request_id,omitempty"`
+	TraceID       string           `json:"trace_id,omitempty"`
 	Internal      string           `json:"internal,omitempty"`
 	Stack         string           `json:"stack,omitempty"`
 	Timestamp     string           `json:"timestamp"`
@@ -102,6 +104,9 @@ func buildEnvelope(c *echo.Context, appErr *Error, cfg Config) ResponseEnvelope 
 	if appErr.RequestID != "" {
 		meta["request_id"] = appErr.RequestID
 	}
+	if appErr.TraceID != "" {
+		meta["trace_id"] = appErr.TraceID
+	}
 
 	return ResponseEnvelope{
 		Success: false,
@@ -112,6 +117,7 @@ func buildEnvelope(c *echo.Context, appErr *Error, cfg Config) ResponseEnvelope 
 			Details:   appErr.Details,
 			Metadata:  appErr.Metadata,
 			RequestID: appErr.RequestID,
+			TraceID:   appErr.TraceID,
 			Internal:  internalStr,
 			Stack:     stackStr,
 			Timestamp: timestamp,
@@ -153,6 +159,7 @@ func buildProblemDetails(c *echo.Context, appErr *Error, cfg Config) ProblemDeta
 		Code:          appErr.Code,
 		InvalidParams: appErr.Details,
 		RequestID:     appErr.RequestID,
+		TraceID:       appErr.TraceID,
 		Internal:      internalStr,
 		Stack:         stackStr,
 		Timestamp:     timestamp,

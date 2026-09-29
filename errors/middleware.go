@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 
 	"github.com/labstack/echo/v5"
+	"ztatic-go-framework/trace"
 )
 
 // NewHTTPErrorHandler creates an Echo v5 compatible HTTPErrorHandler that standardizes all errors.
@@ -30,16 +31,30 @@ func NewHTTPErrorHandler(cfg Config) echo.HTTPErrorHandler {
 			return
 		}
 
-		// 2. Resolve Request ID
-		reqID := c.Response().Header().Get(echo.HeaderXRequestID)
+		// 2. Resolve Request ID & Trace ID
+		tc := trace.FromContext(c.Request().Context())
+		reqID := tc.RequestID
 		if reqID == "" {
-			reqID = c.Request().Header.Get(echo.HeaderXRequestID)
+			reqID = c.Response().Header().Get(echo.HeaderXRequestID)
+			if reqID == "" {
+				reqID = c.Request().Header.Get(echo.HeaderXRequestID)
+			}
+		}
+
+		traceID := tc.TraceID
+		if traceID == "" {
+			if val, ok := c.Get("trace_id").(string); ok && val != "" {
+				traceID = val
+			}
 		}
 
 		// 3. Map error to standardized *Error
 		appErr := mapper.Map(err)
 		if appErr.RequestID == "" {
 			appErr.RequestID = reqID
+		}
+		if appErr.TraceID == "" {
+			appErr.TraceID = traceID
 		}
 
 		// 4. Invoke external APM / Sentry hook if configured
@@ -58,6 +73,9 @@ func NewHTTPErrorHandler(cfg Config) echo.HTTPErrorHandler {
 				slog.String("route", c.Path()),
 				slog.String("method", c.Request().Method),
 				slog.String("uri", c.Request().URL.RequestURI()),
+			}
+			if traceID != "" {
+				logAttrs = append(logAttrs, slog.String("trace_id", traceID))
 			}
 			if appErr.Internal != nil {
 				logAttrs = append(logAttrs, slog.String("cause", appErr.Internal.Error()))
@@ -87,6 +105,7 @@ func NewHTTPErrorHandler(cfg Config) echo.HTTPErrorHandler {
 			c.Logger().Error("failed to render standardized error response",
 				slog.String("render_error", renderErr.Error()),
 				slog.String("req_id", reqID),
+				slog.String("trace_id", traceID),
 			)
 		}
 	}

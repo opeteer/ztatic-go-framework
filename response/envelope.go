@@ -11,6 +11,7 @@ import (
 // ResponseMeta contains request-level observability, correlation, and timing metadata.
 type ResponseMeta struct {
 	RequestID string         `json:"request_id,omitempty"`
+	TraceID   string         `json:"trace_id,omitempty"`
 	Timestamp string         `json:"timestamp,omitempty"`
 	Duration  string         `json:"duration,omitempty"`
 	Extra     map[string]any `json:"extra,omitempty"`
@@ -40,18 +41,22 @@ func NewEnvelope[T any](data T) *Envelope[T] {
 }
 
 // NewErrorEnvelope creates an error response envelope wrapping an errors.ErrorBody.
-func NewErrorEnvelope(errBody *errors.ErrorBody, reqID string) *Envelope[any] {
+func NewErrorEnvelope(errBody *errors.ErrorBody, reqID string, traceID ...string) *Envelope[any] {
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	if errBody != nil && errBody.Timestamp != "" {
 		timestamp = errBody.Timestamp
 	}
+	meta := &ResponseMeta{
+		RequestID: reqID,
+		Timestamp: timestamp,
+	}
+	if len(traceID) > 0 && traceID[0] != "" {
+		meta.TraceID = traceID[0]
+	}
 	return &Envelope[any]{
 		Success: false,
 		Error:   errBody,
-		Meta: &ResponseMeta{
-			RequestID: reqID,
-			Timestamp: timestamp,
-		},
+		Meta:    meta,
 	}
 }
 
