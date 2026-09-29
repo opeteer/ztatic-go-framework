@@ -31,6 +31,11 @@ var defaultRuleTemplates = map[string]string{
 	"credit_card":      "Field '{field}' must be a valid credit card number",
 	"unique":           "Field '{field}' already exists",
 	"exists":           "Field '{field}' does not exist",
+	"file_max":         "Field '{field}' file size exceeds maximum allowed of {param}",
+	"file_min":         "Field '{field}' file size is smaller than minimum required of {param}",
+	"file_ext":         "Field '{field}' has an invalid file extension (allowed: {param})",
+	"file_mime":        "Field '{field}' has an unsupported file MIME type (allowed: {param})",
+	"file_image":       "Field '{field}' image dimensions exceed allowed limits of {param}",
 }
 
 var (

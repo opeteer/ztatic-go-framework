@@ -3,6 +3,11 @@ package validation
 import (
 	"context"
 	"encoding/json"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"mime/multipart"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -10,6 +15,7 @@ import (
 	"sync"
 	"unicode"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -64,6 +70,13 @@ func registerBuiltInRules(v *validator.Validate, getResolver func() DatabaseReso
 	// Context-Aware Database Rules
 	_ = v.RegisterValidationCtx("unique", makeValidateUnique(getResolver))
 	_ = v.RegisterValidationCtx("exists", makeValidateExists(getResolver))
+
+	// File Upload Rules
+	_ = v.RegisterValidation("file_max", validateFileMax)
+	_ = v.RegisterValidation("file_min", validateFileMin)
+	_ = v.RegisterValidation("file_ext", validateFileExt)
+	_ = v.RegisterValidation("file_mime", validateFileMIME)
+	_ = v.RegisterValidation("file_image", validateFileImage)
 
 	// Register user-defined custom rules
 	customRulesMu.RLock()
@@ -282,3 +295,213 @@ func makeValidateExists(getResolver func() DatabaseResolver) validator.FuncCtx {
 		return exists
 	}
 }
+
+// File validation rule implementations
+
+func validateFileMax(fl validator.FieldLevel) bool {
+	fhs := extractFileHeaders(fl)
+	if len(fhs) == 0 {
+		return true
+	}
+	maxBytes, err := parseByteSize(fl.Param())
+	if err != nil || maxBytes <= 0 {
+		return true
+	}
+	for _, fh := range fhs {
+		if fh != nil && fh.Size > maxBytes {
+			return false
+		}
+	}
+	return true
+}
+
+func validateFileMin(fl validator.FieldLevel) bool {
+	fhs := extractFileHeaders(fl)
+	if len(fhs) == 0 {
+		return true
+	}
+	minBytes, err := parseByteSize(fl.Param())
+	if err != nil || minBytes <= 0 {
+		return true
+	}
+	for _, fh := range fhs {
+		if fh != nil && fh.Size < minBytes {
+			return false
+		}
+	}
+	return true
+}
+
+func validateFileExt(fl validator.FieldLevel) bool {
+	fhs := extractFileHeaders(fl)
+	if len(fhs) == 0 {
+		return true
+	}
+	param := fl.Param()
+	if param == "" {
+		return true
+	}
+	allowedList := strings.FieldsFunc(param, func(r rune) bool {
+		return r == ';' || r == ',' || r == '|'
+	})
+	allowedMap := make(map[string]bool, len(allowedList))
+	for _, a := range allowedList {
+		a = strings.ToLower(strings.TrimSpace(a))
+		if a != "" && !strings.HasPrefix(a, ".") {
+			a = "." + a
+		}
+		allowedMap[a] = true
+	}
+
+	for _, fh := range fhs {
+		if fh == nil {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(fh.Filename))
+		if !allowedMap[ext] {
+			return false
+		}
+	}
+	return true
+}
+
+func validateFileMIME(fl validator.FieldLevel) bool {
+	fhs := extractFileHeaders(fl)
+	if len(fhs) == 0 {
+		return true
+	}
+	param := fl.Param()
+	if param == "" {
+		return true
+	}
+	allowedList := strings.FieldsFunc(param, func(r rune) bool {
+		return r == ';' || r == ',' || r == '|'
+	})
+
+	for _, fh := range fhs {
+		if fh == nil {
+			continue
+		}
+		f, err := fh.Open()
+		if err != nil {
+			return false
+		}
+		buf := make([]byte, 4096)
+		n, _ := f.Read(buf)
+		_ = f.Close()
+
+		mtype := mimetype.Detect(buf[:n])
+		detectedMIME := mtype.String()
+
+		matched := false
+		for _, a := range allowedList {
+			a = strings.TrimSpace(a)
+			if strings.EqualFold(detectedMIME, a) || mtype.Is(a) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func validateFileImage(fl validator.FieldLevel) bool {
+	fhs := extractFileHeaders(fl)
+	if len(fhs) == 0 {
+		return true
+	}
+	param := fl.Param()
+	parts := strings.Split(strings.ToLower(param), "x")
+	if len(parts) != 2 {
+		return true
+	}
+	maxW, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	maxH, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || maxW <= 0 || maxH <= 0 {
+		return true
+	}
+
+	for _, fh := range fhs {
+		if fh == nil {
+			continue
+		}
+		f, err := fh.Open()
+		if err != nil {
+			return false
+		}
+		cfg, _, err := image.DecodeConfig(f)
+		_ = f.Close()
+		if err != nil {
+			return false
+		}
+		if cfg.Width > maxW || cfg.Height > maxH {
+			return false
+		}
+	}
+	return true
+}
+
+func extractFileHeaders(fl validator.FieldLevel) []*multipart.FileHeader {
+	val := fl.Field()
+	if !val.IsValid() {
+		return nil
+	}
+
+	if fh, ok := val.Interface().(*multipart.FileHeader); ok {
+		if fh == nil {
+			return nil
+		}
+		return []*multipart.FileHeader{fh}
+	}
+
+	if fh, ok := val.Interface().(multipart.FileHeader); ok {
+		return []*multipart.FileHeader{&fh}
+	}
+
+	if fhs, ok := val.Interface().([]*multipart.FileHeader); ok {
+		return fhs
+	}
+
+	if fhs, ok := val.Interface().([]multipart.FileHeader); ok {
+		res := make([]*multipart.FileHeader, len(fhs))
+		for i := range fhs {
+			res[i] = &fhs[i]
+		}
+		return res
+	}
+
+	return nil
+}
+
+func parseByteSize(s string) (int64, error) {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if s == "" {
+		return 0, strconv.ErrSyntax
+	}
+
+	var multiplier int64 = 1
+	switch {
+	case strings.HasSuffix(s, "GB") || strings.HasSuffix(s, "G"):
+		multiplier = 1024 * 1024 * 1024
+		s = strings.TrimSuffix(strings.TrimSuffix(s, "GB"), "G")
+	case strings.HasSuffix(s, "MB") || strings.HasSuffix(s, "M"):
+		multiplier = 1024 * 1024
+		s = strings.TrimSuffix(strings.TrimSuffix(s, "MB"), "M")
+	case strings.HasSuffix(s, "KB") || strings.HasSuffix(s, "K"):
+		multiplier = 1024
+		s = strings.TrimSuffix(strings.TrimSuffix(s, "KB"), "K")
+	case strings.HasSuffix(s, "B"):
+		multiplier = 1
+		s = strings.TrimSuffix(s, "B")
+	}
+
+	val, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return val * multiplier, nil
+}
+
